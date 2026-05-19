@@ -6,7 +6,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Password: Beechwood
+Password: 
 
 ## Add schools
 Drop CDS files into cds_files/ folder.

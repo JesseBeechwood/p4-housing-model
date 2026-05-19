@@ -476,7 +476,10 @@ if not st.session_state.auth:
         """, unsafe_allow_html=True)
         pwd = st.text_input('', type='password', placeholder='Access Code')
         if st.button('ENTER PLATFORM', use_container_width=True, type='primary'):
-            correct = st.secrets.get('password', 'Beechwood') if hasattr(st, 'secrets') else 'Beechwood'
+            try:
+                correct = st.secrets.get('password', 'Beechwood')
+            except Exception:
+                correct = 'Beechwood'
             if pwd == correct: st.session_state.auth=True; st.rerun()
             else: st.error('Invalid access code')
     st.stop()
@@ -1611,11 +1614,15 @@ elif page == 'AI Overview':
         with st.spinner('Generating analysis...'):
             try:
                 import requests as _req
+                try:
+                    api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+                except Exception:
+                    api_key = ""
                 resp = _req.post(
                     "https://api.anthropic.com/v1/messages",
-                    headers={"Content-Type": "application/json"},
+                    headers={"Content-Type": "application/json", "x-api-key": api_key, "anthropic-version": "2023-06-01"},
                     json={
-                        "model": "claude-sonnet-4-20250514",
+                        "model": "claude-sonnet-4-5",
                         "max_tokens": 1500,
                         "messages": [{"role": "user", "content": prompt}]
                     },

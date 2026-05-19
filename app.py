@@ -476,7 +476,8 @@ if not st.session_state.auth:
         """, unsafe_allow_html=True)
         pwd = st.text_input('', type='password', placeholder='Access Code')
         if st.button('ENTER PLATFORM', use_container_width=True, type='primary'):
-            if pwd == 'Beechwood': st.session_state.auth=True; st.rerun()
+            correct = st.secrets.get('password', 'Beechwood') if hasattr(st, 'secrets') else 'Beechwood'
+            if pwd == correct: st.session_state.auth=True; st.rerun()
             else: st.error('Invalid access code')
     st.stop()
 
@@ -541,7 +542,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     page = st.radio('',['School Dashboard','Market Rankings','Regression Results',
-                        'Compare Schools','Data Audit','Sensitivity Explorer','Data Table'],
+                        'Compare Schools','Data Audit','Sensitivity Explorer','Data Table','AI Overview'],
                     label_visibility='collapsed')
 
     st.markdown(f"""
@@ -1528,6 +1529,124 @@ elif page == 'Sensitivity Explorer':
 # ════════════════════════════════════════════════════════════════════════
 # DATA TABLE
 # ════════════════════════════════════════════════════════════════════════
+
+elif page == 'AI Overview':
+    st.markdown("""
+    <div class="bw-page-title">Artificial Intelligence</div>
+    <div class="bw-page-sub">Investment Analysis</div>
+    """, unsafe_allow_html=True)
+
+    ai_col1, ai_col2 = st.columns([2,1])
+    with ai_col1:
+        ai_schools = st.multiselect('Select Schools', sorted(all_school_results.keys()), default=schools[:1] if schools else [])
+    with ai_col2:
+        analysis_type = st.selectbox('Analysis Type', [
+            'Investment Thesis',
+            'Risk Assessment',
+            'Market Comparison',
+            'Full Investment Memo',
+            'Due Diligence Checklist',
+        ])
+
+    st.markdown(f'<div style="color:{C["MUTED"]};font-size:12px;margin:8px 0 20px;">Select one or more schools and an analysis type. The AI will synthesize all model data into a professional investment assessment using only real data from the model.</div>', unsafe_allow_html=True)
+
+    if ai_schools and st.button('GENERATE ANALYSIS', type='primary'):
+        school_contexts = []
+        for sch in ai_schools:
+            sr = all_school_results.get(sch, {})
+            ch = ch_data.get(sch, {}) if ch_data else {}
+            z  = zillow_data.get(sch, {}) if zillow_data else {}
+            from collegehouse_loader import get_supply_score_ch, supply_signal_ch
+
+            lines = [
+                f"SCHOOL: {sch}",
+                f"Investment Signal: {sr.get('signal','N/A')} | Score: {sr.get('investment_score',0):.3f}/1.000",
+                f"Off-Campus Demand: {int(sr.get('off_campus_demand') or 0):,} beds",
+                f"Off-Campus Rate: {sr.get('pct_ug_off_campus',0):.1%}",
+                f"Retention Rate: {sr.get('retention_rate',0):.1%}",
+                f"Out-of-State Share: {sr.get('pct_oos_ug',0):.1%}",
+                f"In-State Tuition: ${sr.get('tuition_instate') or 0:,}",
+                f"Avg Aid Package: ${sr.get('avg_aid_package') or 0:,}",
+                f"Data Source: {sr.get('data_source','CDS')} ({len(sr.get('panel',[]))} years)",
+            ]
+            if ch and 'error' not in ch:
+                sc  = get_supply_score_ch(ch)
+                sig,_ = supply_signal_ch(sc)
+                lines += [
+                    f"Supply Signal: {sig} (score: {sc:.3f})",
+                    f"Occupancy: {ch.get('occupancy_rate',0):.1%}",
+                    f"Pre-Lease: {ch.get('pre_lease_rate',0):.1%}",
+                    f"Bed-to-Student Ratio: {ch.get('bed_to_student_ratio','N/A')}",
+                    f"Market Saturation: {ch.get('market_saturation','N/A')}",
+                    f"Avg Rent/Bed: ${ch.get('avg_rent_per_bed',0):,.0f}/mo",
+                    f"Under Construction: {ch.get('beds_under_construction',0):,} beds",
+                ]
+            if z:
+                lines += [
+                    f"Current Rent (Zillow): ${z.get('latest_rent',0):,.0f}/mo",
+                    f"Rent Trend: {z.get('rent_trend_pct',0):.1%}/yr",
+                    f"Rent Momentum: {z.get('momentum_label','N/A')}",
+                ]
+            school_contexts.append("\n".join(lines))
+
+        type_instructions = {
+            'Investment Thesis':      "Write a concise investment thesis for this student housing market. Cover demand fundamentals, supply dynamics, and rent trajectory. End with a clear BUY/HOLD/AVOID recommendation with conviction level.",
+            'Risk Assessment':        "Identify and assess the top 5 risks for investing in this student housing market. For each risk cite the specific data point that supports or mitigates it. Be honest about data gaps.",
+            'Market Comparison':      "Compare these markets side by side. Identify which represents the strongest near-term investment opportunity and explain specifically what differentiates them.",
+            'Full Investment Memo':   "Write a full investment committee memo. Sections: Executive Summary, Market Overview, Demand Analysis, Supply Analysis, Rent Analysis, Risk Factors, Recommendation. Use professional REPE language.",
+            'Due Diligence Checklist':"Generate a prioritized due diligence checklist. For each item explain why it matters given the specific data shown and what you expect to find.",
+        }
+
+        prompt = (
+            "You are a senior real estate private equity analyst specializing in student housing investments. "
+            "You have been given proprietary market data from a quantitative investment screening model.\n\n"
+            + type_instructions[analysis_type]
+            + "\n\nMARKET DATA:\n\n"
+            + "\n\n---\n\n".join(school_contexts)
+            + "\n\nWrite in a professional but direct tone appropriate for an investment committee. "
+            "Use specific numbers from the data. Do not make generic statements that could apply to any market. "
+            "Format with headers where appropriate."
+        )
+
+        with st.spinner('Generating analysis...'):
+            try:
+                import requests as _req
+                resp = _req.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "model": "claude-sonnet-4-20250514",
+                        "max_tokens": 1500,
+                        "messages": [{"role": "user", "content": prompt}]
+                    },
+                    timeout=45
+                )
+                ai_text = resp.json().get('content', [{}])[0].get('text', 'No response received.')
+
+                st.markdown(
+                    '<div style="background:#0E0E10;border:1px solid rgba(200,170,125,0.27);'
+                    'border-top:2px solid #C8AA7D;padding:28px;margin-top:20px;">'
+                    '<div style="font-size:9px;font-weight:700;letter-spacing:.25em;'
+                    'text-transform:uppercase;color:#C8AA7D;margin-bottom:16px;'
+                    'font-family:Manrope,sans-serif;">'
+                    + analysis_type.upper() + ' \u2014 ' + ' + '.join(ai_schools)
+                    + '</div></div>',
+                    unsafe_allow_html=True
+                )
+                st.markdown(ai_text)
+                st.download_button(
+                    label='DOWNLOAD ANALYSIS',
+                    data=ai_text,
+                    file_name='Beechwood_' + '_'.join(ai_schools) + '_' + analysis_type.replace(' ','_') + '.txt',
+                    mime='text/plain',
+                )
+            except Exception as e:
+                st.error(f'Analysis failed: {e}. Please try again.')
+
+    elif not ai_schools:
+        st.markdown(f'<div class="ib">Select at least one school above then click Generate Analysis.</div>', unsafe_allow_html=True)
+
+
 elif page == 'Data Table':
     st.markdown('''
     <div class="bw-page-title">Research Data</div>

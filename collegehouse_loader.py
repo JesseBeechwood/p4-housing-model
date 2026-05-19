@@ -30,7 +30,6 @@ def load_collegehouse(school, folder=None):
         'UniversityOfMaryland': ['umd','universityofmaryland','university_of_maryland'],
         'BostonCollege':        ['bostoncollege','boston_college','bc'],
         'UCBerkeley':           ['ucberkeley','uc_berkeley','ucb','berkeley'],
-        'NCState':              ['ncstate','nc_state','ncsu','raleigh-nc'],
     }
     aliases = school_aliases.get(school, [school.lower()])
     patterns = []
@@ -255,10 +254,6 @@ def load_all_collegehouse(folder=None):
         'miami':                'Miami',
         'georgia_tech':         'GeorgiaTech',
         'gt':                   'GeorgiaTech',
-        'ncstate':              'NCState',
-        'nc_state':             'NCState',
-        'ncsu':                 'NCState',
-        'raleigh-nc':           'NCState',
     }
     for f in Path(folder).glob('collegehouse_*.xlsx'):
         raw = f.stem.replace('collegehouse_', '').lower()

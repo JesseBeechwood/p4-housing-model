@@ -579,18 +579,22 @@ if page == 'School Dashboard':
     h1,h2 = st.columns([3,1])
     with h1:
         logo_html = logo_img_html(selected, size=52, style="margin-right:14px;vertical-align:middle;")
-        st.markdown(f"""
-        <div class="bw-page-title">Market Analysis</div>
-        <div style="display:flex;align-items:center;gap:0px;margin-bottom:6px;">
-            {logo_html}
-            <span style="font-size:28px;font-weight:200;color:#F5F1EA;letter-spacing:-.01em;
-                         font-family:Manrope,sans-serif;">{selected}</span>
-        </div>
-        <div style="font-size:9px;color:#3A3028;letter-spacing:.15em;font-family:Manrope,sans-serif;
-                    text-transform:uppercase;margin-bottom:24px;">
-            CDS {int(sp['academic_year'].min())}–{int(sp['academic_year'].max())} &nbsp;·&nbsp; {len(sp)} Years &nbsp;·&nbsp; Full Data
-        </div>
-        """, unsafe_allow_html=True)
+        name_span = '<span style="font-size:28px;font-weight:200;color:#F5F1EA;letter-spacing:-.01em;font-family:Manrope,sans-serif;">' + selected + '</span>'
+        yr_min = int(sp['academic_year'].min())
+        yr_max = int(sp['academic_year'].max())
+        yr_count = len(sp)
+        header_html = (
+            '<div class="bw-page-title">Market Analysis</div>'
+            '<div style="display:flex;align-items:center;gap:0px;margin-bottom:6px;">'
+            + logo_html + name_span +
+            '</div>'
+            '<div style="font-size:9px;color:#3A3028;letter-spacing:.15em;font-family:Manrope,sans-serif;'
+            'text-transform:uppercase;margin-bottom:24px;">'
+            'CDS ' + str(yr_min) + '&ndash;' + str(yr_max) + ' &nbsp;&middot;&nbsp; '
+            + str(yr_count) + ' Years &nbsp;&middot;&nbsp; Full Data'
+            '</div>'
+        )
+        st.markdown(header_html, unsafe_allow_html=True)
     with h2:
         st.markdown(signal_html(sig,sco,scol),unsafe_allow_html=True)
 

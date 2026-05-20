@@ -89,7 +89,9 @@ def _trend_pct(annual_dict):
     vals = [annual_dict[y] for y in yrs]
     if len(yrs) < 2: return 0.0
     slope = np.polyfit(range(len(yrs)), vals, 1)[0]
-    return (slope / abs(vals[0]) * 100) if vals[0] != 0 else 0.0
+    base  = np.median(vals)  # use median not first value to avoid anomalies
+    raw   = (slope / abs(base) * 100) if base != 0 else 0.0
+    return round(max(-15.0, min(25.0, raw)), 2)  # cap at realistic range
 
 def _yoy(annual_dict):
     yrs  = sorted(annual_dict.keys())

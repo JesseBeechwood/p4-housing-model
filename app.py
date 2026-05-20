@@ -934,7 +934,9 @@ if page == 'School Dashboard':
         # CollegeHouse insight
         pb = ch.get('purpose_built_beds',0) or 0
         excess = ch.get('estimated_excess',0) or 0
-        st.markdown(f'<div class="ib">CollegeHouse tracks {pb:,} purpose-built beds across {ch.get("property_count",0)} properties near campus. Estimated excess supply of {excess:,} beds. Pre-lease at {pl:.1%} suggests {"strong" if pl and pl>0.75 else "moderate"} forward demand for next lease cycle. Source: CollegeHouse {ch.get("source","")}</div>',unsafe_allow_html=True)
+        pl_str = f'{pl:.1%}' if pl is not None else 'N/A'
+        demand_str = 'strong' if pl and pl > 0.75 else 'moderate'
+        st.markdown(f'<div class="ib">CollegeHouse tracks {pb:,} purpose-built beds across {ch.get("property_count",0)} properties near campus. Estimated excess supply of {excess:,} beds. Pre-lease at {pl_str} suggests {demand_str} forward demand for next lease cycle. Source: CollegeHouse {ch.get("source","")}</div>',unsafe_allow_html=True)
 
     st.markdown('<div class="sh">Investment Score Components</div>',unsafe_allow_html=True)
     lr  = sp.iloc[-1]
@@ -1581,10 +1583,13 @@ elif page == 'AI Overview':
             if ch and 'error' not in ch:
                 sc  = get_supply_score_ch(ch)
                 sig,_ = supply_signal_ch(sc)
+                sc_str = f'{sc:.3f}' if sc is not None else 'N/A'
+                occ = ch.get('occupancy_rate') or 0
+                pl2 = ch.get('pre_lease_rate') or 0
                 lines += [
-                    f"Supply Signal: {sig} (score: {sc:.3f})",
-                    f"Occupancy: {ch.get('occupancy_rate',0):.1%}",
-                    f"Pre-Lease: {ch.get('pre_lease_rate',0):.1%}",
+                    f"Supply Signal: {sig} (score: {sc_str})",
+                    f"Occupancy: {occ:.1%}",
+                    f"Pre-Lease: {pl2:.1%}",
                     f"Bed-to-Student Ratio: {ch.get('bed_to_student_ratio','N/A')}",
                     f"Market Saturation: {ch.get('market_saturation','N/A')}",
                     f"Avg Rent/Bed: ${ch.get('avg_rent_per_bed',0):,.0f}/mo",

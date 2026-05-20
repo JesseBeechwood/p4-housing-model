@@ -456,7 +456,14 @@ if 'auth' not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     _,mid,_ = st.columns([1,1.2,1])
     with mid:
-        st.markdown("""
+        st.markdown(f"""
+        <style>
+        @keyframes bw-pulse {{
+            0%,100% {{ opacity:0.7; transform:scale(1); }}
+            50%      {{ opacity:1.0; transform:scale(1.06); }}
+        }}
+        .bw-login-logo {{ animation: bw-pulse 2.4s ease-in-out infinite; }}
+        </style>
         <div style="text-align:center;padding:48px 40px 32px;margin-top:40px;
                     border:1px solid rgba(200,170,125,0.13);border-top:2px solid #C8AA7D;
                     background:#0E0E10;">
@@ -464,9 +471,10 @@ if not st.session_state.auth:
                         color:#C8AA7D;margin-bottom:16px;font-family:Manrope,sans-serif;">
                 Beechwood Property Holdings
             </div>
-            <div style="font-size:26px;font-weight:200;color:#F5F1EA;letter-spacing:-.01em;
-                        font-family:Manrope,sans-serif;margin-bottom:6px;">
-                Investment Intelligence
+            <div style="display:flex;align-items:center;gap:14px;justify-content:center;margin-bottom:6px;">
+                <img src="{BEECHWOOD_LOGO}" style="width:42px;height:auto;flex-shrink:0;opacity:0.93;" />
+                <span style="font-size:26px;font-weight:200;color:#F5F1EA;letter-spacing:-.01em;
+                             font-family:Manrope,sans-serif;">Investment Intelligence</span>
             </div>
             <div style="font-size:11px;color:#4A4035;letter-spacing:.08em;margin-bottom:32px;
                         font-family:Inter,sans-serif;">
@@ -516,8 +524,35 @@ def _unpack():
         pass
     return panel, regressions, school_results, zillow, all_school_results, ch_data
 
-with st.spinner('Running regressions...'):
-    panel, regressions, school_results, zillow_data, all_school_results, ch_data = _unpack()
+st.markdown(f"""
+<style>
+@keyframes bw-spin {{
+    0%   {{ opacity:0.4; transform:scale(0.92) rotate(-4deg); }}
+    25%  {{ opacity:1.0; transform:scale(1.05) rotate(0deg); }}
+    50%  {{ opacity:0.7; transform:scale(0.98) rotate(3deg); }}
+    75%  {{ opacity:1.0; transform:scale(1.04) rotate(0deg); }}
+    100% {{ opacity:0.4; transform:scale(0.92) rotate(-4deg); }}
+}}
+.bw-loading-wrap {{
+    display:flex;flex-direction:column;align-items:center;
+    justify-content:center;padding:80px 0;
+}}
+.bw-loading-logo {{ animation: bw-spin 1.8s ease-in-out infinite; width:64px; }}
+.bw-loading-text {{
+    margin-top:20px;font-size:9px;letter-spacing:.25em;text-transform:uppercase;
+    color:#C8AA7D;font-family:Manrope,sans-serif;
+}}
+</style>
+<div class="bw-loading-wrap">
+    <img class="bw-loading-logo" src="{BEECHWOOD_LOGO}" />
+    <div class="bw-loading-text">Running Regressions</div>
+</div>
+""", unsafe_allow_html=True)
+_loading_placeholder = st.empty()
+with _loading_placeholder:
+    pass
+# actual load:
+panel, regressions, school_results, zillow_data, all_school_results, ch_data = _unpack()
 
 if panel is None:
     st.error('No CDS files found in cds_files/ folder.'); st.stop()
@@ -529,7 +564,10 @@ with st.sidebar:
     import datetime
     now = datetime.datetime.now().strftime('%b %d, %Y  %H:%M')
     st.markdown(f"""
-    <div style="padding:28px 0 24px;">
+    <div style="padding:20px 0 24px;">
+        <div style="text-align:left;margin-bottom:14px;">
+            <img src="{BEECHWOOD_LOGO}" style="width:36px;height:auto;display:block;opacity:0.92;" />
+        </div>
         <div style="font-size:8px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;
                     color:#C8AA7D;margin-bottom:8px;font-family:Manrope,sans-serif;">
             Beechwood Property Holdings

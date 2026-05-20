@@ -1585,10 +1585,16 @@ elif page == 'AI Overview':
                     f"Under Construction: {ch.get('beds_under_construction',0):,} beds",
                 ]
             if z:
+                latest = z.get('latest_rent') or 0
+                momentum = z.get('momentum_label','N/A')
+                # Get actual rent values for last 3 years only - avoid trend calculation anomalies
+                annual = z.get('rent_annual_avg', {}) or {}
+                recent_yrs = sorted(annual.keys())[-3:] if annual else []
+                rent_history = ', '.join([f"{yr}: ${annual[yr]:,.0f}" for yr in recent_yrs])
                 lines += [
-                    f"Current Rent (Zillow): ${z.get('latest_rent',0):,.0f}/mo",
-                    f"Rent Trend: {z.get('rent_trend_pct',0):.1%}/yr",
-                    f"Rent Momentum: {z.get('momentum_label','N/A')}",
+                    f"Current Rent (Zillow ZORI): ${latest:,.0f}/mo",
+                    f"Recent Rent History: {rent_history}",
+                    f"Rent Momentum Signal: {momentum}",
                 ]
             school_contexts.append("\n".join(lines))
 

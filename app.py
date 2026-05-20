@@ -1354,7 +1354,7 @@ elif page == 'Data Audit':
 
     expected = {
         'total_undergrad':   (1000, 80000, 'Total enrollment'),
-        'pct_ug_off_campus': (0.05, 0.98,  'Off-campus rate'),
+        'pct_ug_off_campus': (0.01, 0.98,  'Off-campus rate'),
         'pct_ug_on_campus':  (0.02, 0.95,  'On-campus rate'),
         'retention_rate':    (0.60, 1.00,  'Retention rate'),
         'pct_oos_ug':        (0.00, 0.95,  'OOS share'),

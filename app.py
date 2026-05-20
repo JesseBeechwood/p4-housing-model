@@ -686,6 +686,7 @@ if page == 'School Dashboard':
         else:
             st.info('Need 3+ years of data to generate forecast.')
 
+    with right:
         # ── Enrollment Forecast ───────────────────────────────────────────
         st.markdown('<div class="sh">Enrollment Forecast</div>', unsafe_allow_html=True)
         enroll_hist_x = list(sp['academic_year'])
@@ -746,7 +747,6 @@ if page == 'School Dashboard':
         else:
             st.info('Need 2+ years of enrollment data to project.')
 
-    with right:
         st.markdown('<div class="sh">Historical Trends</div>',unsafe_allow_html=True)
         fig2 = base_fig(260)
         yrs  = list(sp['academic_year'])

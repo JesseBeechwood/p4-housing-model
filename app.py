@@ -1836,15 +1836,13 @@ elif page == 'Market Map':
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # ── Compare shortcut ──────────────────────────────────────────────────
+    # ── Inline Compare ────────────────────────────────────────────────────
     st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
     st.markdown('<div style="height:1px;background:linear-gradient(90deg,rgba(200,170,125,0.20),transparent);margin-bottom:16px;"></div>', unsafe_allow_html=True)
-
     st.markdown('<div class="sh">Compare Schools</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:13px;color:#6B7280;margin-bottom:12px;">Select two schools to compare, then click the button to open the full comparison view.</div>', unsafe_allow_html=True)
 
-    cmp1, cmp2, cmp3 = st.columns([2, 2, 1])
     school_display = sorted(display_schools)
+    cmp1, cmp2 = st.columns(2)
     with cmp1:
         ca = st.selectbox('School A', school_display, key='map_cmp_a')
     with cmp2:
@@ -1852,13 +1850,77 @@ elif page == 'Market Map':
         cb = st.selectbox('School B', school_display,
                           index=school_display.index(default_b) if default_b in school_display else 0,
                           key='map_cmp_b')
-    with cmp3:
-        st.markdown('<div style="height:28px;"></div>', unsafe_allow_html=True)
-        if st.button('Compare →', use_container_width=True, type='primary'):
-            st.session_state['compare_a'] = ca
-            st.session_state['compare_b'] = cb
-            st.session_state['nav_to_compare'] = True
 
-    if st.session_state.get('nav_to_compare'):
-        st.session_state['nav_to_compare'] = False
-        st.info('Switch to the **Compare Schools** tab in the sidebar to see the full comparison.')
+    if ca and cb and ca != cb:
+        # ── Score cards ──────────────────────────────────────────────────
+        st.markdown('<div class="sh" style="font-size:13px;margin-top:12px;">Investment Score</div>', unsafe_allow_html=True)
+        cc1, cc2 = st.columns(2)
+        for col_, sch in [(cc1, ca), (cc2, cb)]:
+            sr   = school_results[sch]
+            sig  = sr['signal']; sco = sr['investment_score']; scol = sr['signal_color']
+            label = sch if sch not in ('BostonCollege','GeorgiaTech','NCState','UCBerkeley','UniversityOfMaryland') else {
+                'BostonCollege':'Boston College','GeorgiaTech':'Georgia Tech',
+                'NCState':'NC State','UCBerkeley':'UC Berkeley',
+                'UniversityOfMaryland':'Univ. of Maryland'}[sch]
+            with col_:
+                st.markdown(f"""<div class="card" style="text-align:center">
+                    <div style="font-size:13px;font-weight:600;color:{C['TEXT']};margin-bottom:10px;">{label}</div>
+                    <div style="background:{scol}22;border:1px solid {scol};border-radius:6px;
+                                padding:6px 14px;display:inline-block;color:{scol};font-weight:700;font-size:14px;">{sig}</div>
+                    <div style="margin-top:8px;font-size:26px;font-weight:700;color:{scol};">{sco:.3f}</div>
+                    <div style="font-size:11px;color:{C['MUTED']};">investment score</div>
+                </div>""", unsafe_allow_html=True)
+
+        # ── Side-by-side metrics table ────────────────────────────────────
+        st.markdown('<div class="sh" style="font-size:13px;margin-top:12px;">Key Metrics</div>', unsafe_allow_html=True)
+        metric_rows_cmp = {
+            'Total Undergrads':  ('total_undergrad',   'number'),
+            'Off-Campus Demand': ('off_campus_demand', 'number'),
+            'Off-Campus Rate':   ('pct_ug_off_campus', 'pct'),
+            'Retention Rate':    ('retention_rate',    'pct'),
+            'OOS Share':         ('pct_oos_ug',        'pct'),
+            'Instate Tuition':   ('tuition_instate',   'money'),
+            'Avg Aid Package':   ('avg_aid_package',   'money'),
+            'Need Met %':        ('pct_need_met',      'pct'),
+        }
+        table_cmp = {'Metric': list(metric_rows_cmp.keys())}
+        for sch in [ca, cb]:
+            sr = school_results[sch]
+            table_cmp[sch] = [fmt(sr.get(col), style) for _, (col, style) in metric_rows_cmp.items()]
+        st.dataframe(pd.DataFrame(table_cmp), use_container_width=True, hide_index=True)
+
+        # ── Radar chart ───────────────────────────────────────────────────
+        st.markdown('<div class="sh" style="font-size:13px;margin-top:12px;">Multi-Dimensional Profile</div>', unsafe_allow_html=True)
+        radar_cols_cmp   = ['pct_ug_off_campus','retention_rate','pct_oos_ug','pct_need_met','investment_score']
+        radar_labels_cmp = ['Off-Campus Rate','Retention','OOS Share','Need Met','Inv. Score']
+        cmp_color_map    = {ca: SCHOOL_COLORS[0], cb: SCHOOL_COLORS[1]}
+        fig_r2 = go.Figure()
+        for sch in [ca, cb]:
+            sr = school_results[sch]
+            vals = []
+            for col in radar_cols_cmp:
+                v = sr['investment_score'] if col == 'investment_score' else sr.get(col)
+                all_v = [school_results[s]['investment_score'] if col == 'investment_score'
+                         else (school_results[s].get(col) or 0) for s in schools]
+                mn, mx = min(all_v), max(all_v)
+                vals.append(round(((v or 0) - mn) / (mx - mn) if mx > mn else 0.5, 3))
+            vals.append(vals[0])
+            fig_r2.add_trace(go.Scatterpolar(
+                r=vals, theta=radar_labels_cmp + [radar_labels_cmp[0]],
+                fill='toself', name=sch,
+                line=dict(color=cmp_color_map[sch], width=2),
+                fillcolor=cmp_color_map[sch].replace('1)', '0.12)')))
+        fig_r2.update_layout(
+            paper_bgcolor=C['CARD'], plot_bgcolor=C['CARD'],
+            font=dict(family='Segoe UI', color=C['TEXT'], size=12),
+            height=360, margin=dict(l=60, r=60, t=30, b=30),
+            polar=dict(
+                bgcolor=C['CARD'],
+                radialaxis=dict(visible=True, range=[0,1], tickfont=dict(color=C['MUTED']), gridcolor='rgba(200,170,125,0.09)'),
+                angularaxis=dict(tickfont=dict(color=C['TEXT']), gridcolor='rgba(200,170,125,0.09)'),
+            ),
+            legend=dict(orientation='h', y=-0.12, bgcolor='rgba(0,0,0,0)', font=dict(color=C['MUTED'])),
+        )
+        st.plotly_chart(fig_r2, use_container_width=True)
+    elif ca == cb:
+        st.info('Select two different schools to compare.')

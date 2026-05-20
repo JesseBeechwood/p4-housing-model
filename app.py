@@ -412,6 +412,7 @@ SCHOOL_BRAND = {
     'Vanderbilt':           ('#866D4B','#000000','VU'),
     'SMU':                  ('#CC0000','#354CA1','SMU'),
     'Stanford':             ('#8C1515','#FFFFFF','STAN'),
+    'Syracuse':             ('#F76900','#FFFFFF','SYR'),
     'Houston':              ('#C8102E','#FFFFFF','UH'),
     'TexasAM':              ('#500000','#FFFFFF','A&M'),
     'Texas':                ('#BF5700','#FFFFFF','UT'),

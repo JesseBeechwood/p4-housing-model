@@ -1731,11 +1731,11 @@ elif page == 'Market Map':
     all_states      = sorted(set(m['state']       for m in SCHOOL_META.values()))
 
     with fc1:
-        sel_conf   = st.multiselect('Conference', all_conferences, default=all_conferences)
+        sel_conf   = st.multiselect('Conference', all_conferences, default=[])
     with fc2:
-        sel_region = st.multiselect('Region',     all_regions,     default=all_regions)
+        sel_region = st.multiselect('Region',     all_regions,     default=[])
     with fc3:
-        sel_state  = st.multiselect('State',      all_states,      default=all_states)
+        sel_state  = st.multiselect('State',      all_states,      default=[])
 
     # ── Build filtered school list ────────────────────────────────────────
     display_schools = [
@@ -1844,14 +1844,11 @@ elif page == 'Market Map':
     school_display = sorted(display_schools)
     cmp1, cmp2 = st.columns(2)
     with cmp1:
-        ca = st.selectbox('School A', school_display, key='map_cmp_a')
+        ca = st.selectbox('School A', ['— select —'] + school_display, key='map_cmp_a')
     with cmp2:
-        default_b = school_display[1] if len(school_display) > 1 else school_display[0]
-        cb = st.selectbox('School B', school_display,
-                          index=school_display.index(default_b) if default_b in school_display else 0,
-                          key='map_cmp_b')
+        cb = st.selectbox('School B', ['— select —'] + school_display, key='map_cmp_b')
 
-    if ca and cb and ca != cb:
+    if ca != '— select —' and cb != '— select —' and ca != cb:
         # ── Score cards ──────────────────────────────────────────────────
         st.markdown('<div class="sh" style="font-size:13px;margin-top:12px;">Investment Score</div>', unsafe_allow_html=True)
         cc1, cc2 = st.columns(2)
@@ -1922,5 +1919,5 @@ elif page == 'Market Map':
             legend=dict(orientation='h', y=-0.12, bgcolor='rgba(0,0,0,0)', font=dict(color=C['MUTED'])),
         )
         st.plotly_chart(fig_r2, use_container_width=True)
-    elif ca == cb:
+    elif ca != '— select —' and cb != '— select —' and ca == cb:
         st.info('Select two different schools to compare.')

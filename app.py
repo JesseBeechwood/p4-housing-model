@@ -410,6 +410,7 @@ SCHOOL_BRAND = {
     'Pittsburgh':           ('#003594','#FFB81C','PITT'),
     'SouthCarolina':        ('#73000A','#F5A800','USC'),
     'Vanderbilt':           ('#866D4B','#000000','VU'),
+    'SMU':                  ('#CC0000','#354CA1','SMU'),
     'Houston':              ('#C8102E','#FFFFFF','UH'),
     'TexasAM':              ('#500000','#FFFFFF','A&M'),
     'Texas':                ('#BF5700','#FFFFFF','UT'),

@@ -548,7 +548,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     page = st.radio('',['School Dashboard','Market Rankings','Regression Results',
-                        'Compare Schools','Data Audit','Sensitivity Explorer','Data Table','AI Overview'],
+                        'Compare Schools','Data Audit','Sensitivity Explorer','Data Table','AI Overview','Market Map'],
                     label_visibility='collapsed')
 
     st.markdown(f"""
@@ -1354,7 +1354,7 @@ elif page == 'Data Audit':
 
     expected = {
         'total_undergrad':   (1000, 80000, 'Total enrollment'),
-        'pct_ug_off_campus': (0.01, 0.98,  'Off-campus rate'),
+        'pct_ug_off_campus': (0.05, 0.98,  'Off-campus rate'),
         'pct_ug_on_campus':  (0.02, 0.95,  'On-campus rate'),
         'retention_rate':    (0.60, 1.00,  'Retention rate'),
         'pct_oos_ug':        (0.00, 0.95,  'OOS share'),
@@ -1687,3 +1687,178 @@ elif page == 'Data Table':
             'ftfy_enrolled','total_applicants','admission_rate','yield_rate'] if c in filtered.columns]
     st.dataframe(filtered[show],use_container_width=True,hide_index=True)
     st.download_button('⬇ Download CSV',filtered[show].to_csv(index=False),'p4_panel.csv','text/csv')
+
+elif page == 'Market Map':
+    st.markdown('''
+    <div class="bw-page-title">Market Map</div>
+    <div class="bw-page-sub">Geographic Intelligence</div>
+    ''', unsafe_allow_html=True)
+
+    import plotly.graph_objects as go
+
+    # ── School metadata (conference-corrected) ─────────────────────────────
+    SCHOOL_META = {
+        'BostonCollege':        dict(lat=42.3355, lon=-71.1685, city='Chestnut Hill, MA', state='MA', conference='ACC',     region='Northeast'),
+        'Clemson':              dict(lat=34.6834, lon=-82.8374, city='Clemson, SC',        state='SC', conference='ACC',     region='Southeast'),
+        'Duke':                 dict(lat=36.0014, lon=-78.9382, city='Durham, NC',          state='NC', conference='ACC',     region='Southeast'),
+        'GeorgiaTech':          dict(lat=33.7756, lon=-84.3963, city='Atlanta, GA',         state='GA', conference='ACC',     region='Southeast'),
+        'Louisville':           dict(lat=38.2086, lon=-85.7585, city='Louisville, KY',      state='KY', conference='ACC',     region='Southeast'),
+        'Miami':                dict(lat=25.7217, lon=-80.2684, city='Coral Gables, FL',    state='FL', conference='ACC',     region='Southeast'),
+        'NCState':              dict(lat=35.7872, lon=-78.6819, city='Raleigh, NC',          state='NC', conference='ACC',     region='Southeast'),
+        'Pittsburgh':           dict(lat=40.4444, lon=-79.9608, city='Pittsburgh, PA',      state='PA', conference='ACC',     region='Northeast'),
+        'SMU':                  dict(lat=32.8410, lon=-96.7842, city='Dallas, TX',           state='TX', conference='ACC',     region='South'),
+        'Stanford':             dict(lat=37.4275, lon=-122.1697,city='Stanford, CA',        state='CA', conference='ACC',     region='West'),
+        'Syracuse':             dict(lat=43.0390, lon=-76.1350, city='Syracuse, NY',        state='NY', conference='ACC',     region='Northeast'),
+        'UCBerkeley':           dict(lat=37.8724, lon=-122.2595,city='Berkeley, CA',        state='CA', conference='ACC',     region='West'),
+        'UNC':                  dict(lat=35.9049, lon=-79.0469, city='Chapel Hill, NC',     state='NC', conference='ACC',     region='Southeast'),
+        'UniversityOfMaryland': dict(lat=38.9869, lon=-76.9426, city='College Park, MD',   state='MD', conference='Big Ten', region='Northeast'),
+    }
+
+    # ── Signal → pin color ────────────────────────────────────────────────
+    def pin_color(signal):
+        s = (signal or '').upper()
+        if 'STRONG BUY' in s: return '#10B981'
+        if 'BUY'        in s: return '#34D399'
+        if 'HOLD'       in s: return '#F59E0B'
+        if 'CAUTION'    in s: return '#F97316'
+        if 'AVOID'      in s: return '#EF4444'
+        return '#9CA3AF'
+
+    # ── Filters ───────────────────────────────────────────────────────────
+    fc1, fc2, fc3 = st.columns(3)
+    all_conferences = sorted(set(m['conference'] for m in SCHOOL_META.values()))
+    all_regions     = sorted(set(m['region']     for m in SCHOOL_META.values()))
+    all_states      = sorted(set(m['state']       for m in SCHOOL_META.values()))
+
+    with fc1:
+        sel_conf   = st.multiselect('Conference', all_conferences, default=all_conferences)
+    with fc2:
+        sel_region = st.multiselect('Region',     all_regions,     default=all_regions)
+    with fc3:
+        sel_state  = st.multiselect('State',      all_states,      default=all_states)
+
+    # ── Build filtered school list ────────────────────────────────────────
+    display_schools = [
+        s for s, m in SCHOOL_META.items()
+        if s in school_results
+        and (not sel_conf   or m['conference'] in sel_conf)
+        and (not sel_region or m['region']     in sel_region)
+        and (not sel_state  or m['state']      in sel_state)
+    ]
+
+    # ── Build map traces ──────────────────────────────────────────────────
+    lats, lons, colors, texts, hovers = [], [], [], [], []
+    for s in display_schools:
+        sr = school_results[s]
+        m  = SCHOOL_META[s]
+        signal = sr.get('signal', 'N/A')
+        score  = sr.get('investment_score', 0) or 0
+        demand = int(sr.get('off_campus_demand', 0) or 0)
+        label  = s if s not in ('BostonCollege','GeorgiaTech','NCState','UCBerkeley','UniversityOfMaryland') else {
+            'BostonCollege':'Boston College','GeorgiaTech':'Georgia Tech',
+            'NCState':'NC State','UCBerkeley':'UC Berkeley',
+            'UniversityOfMaryland':'Univ. of Maryland'
+        }[s]
+        lats.append(m['lat'])
+        lons.append(m['lon'])
+        colors.append(pin_color(signal))
+        texts.append(label)
+        hovers.append(
+            f"<b>{label}</b><br>"
+            f"Signal: {signal}<br>"
+            f"Score: {score:.3f}<br>"
+            f"Off-Campus Demand: {demand:,}<br>"
+            f"Conference: {m['conference']}<br>"
+            f"Location: {m['city']}"
+        )
+
+    fig = go.Figure()
+
+    # Legend color groups
+    legend_groups = {
+        'Buy / Strong Buy': '#10B981',
+        'Hold':             '#F59E0B',
+        'Caution':          '#F97316',
+        'Avoid':            '#EF4444',
+    }
+    for label, color in legend_groups.items():
+        fig.add_trace(go.Scattergeo(
+            lat=[None], lon=[None],
+            mode='markers',
+            marker=dict(size=12, color=color),
+            name=label,
+            showlegend=True,
+        ))
+
+    # Main pins
+    fig.add_trace(go.Scattergeo(
+        lat=lats, lon=lons,
+        mode='markers+text',
+        text=texts,
+        textposition='top center',
+        textfont=dict(size=11, color='#F5F1EA', family='Manrope, sans-serif'),
+        hovertemplate='%{customdata}<extra></extra>',
+        customdata=hovers,
+        marker=dict(
+            size=14,
+            color=colors,
+            line=dict(width=1.5, color='#1A1A2E'),
+            symbol='circle',
+        ),
+        showlegend=False,
+    ))
+
+    fig.update_layout(
+        geo=dict(
+            scope='usa',
+            projection_type='albers usa',
+            showland=True,   landcolor='#1E1E2E',
+            showlakes=True,  lakecolor='#0E0E18',
+            showcoastlines=True, coastlinecolor='#2D2D3F',
+            showsubunits=True,   subunitcolor='#2D2D3F',
+            bgcolor='#0E0E18',
+        ),
+        paper_bgcolor='#0E0E18',
+        plot_bgcolor='#0E0E18',
+        font=dict(color='#F5F1EA', family='Manrope, sans-serif'),
+        margin=dict(l=0, r=0, t=10, b=0),
+        height=560,
+        legend=dict(
+            orientation='h',
+            yanchor='bottom', y=0.02,
+            xanchor='center', x=0.5,
+            bgcolor='rgba(30,30,46,0.85)',
+            bordercolor='#3A3028',
+            borderwidth=1,
+            font=dict(size=12, color='#F5F1EA'),
+        ),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ── Compare shortcut ──────────────────────────────────────────────────
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:1px;background:linear-gradient(90deg,rgba(200,170,125,0.20),transparent);margin-bottom:16px;"></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="sh">Compare Schools</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:13px;color:#6B7280;margin-bottom:12px;">Select two schools to compare, then click the button to open the full comparison view.</div>', unsafe_allow_html=True)
+
+    cmp1, cmp2, cmp3 = st.columns([2, 2, 1])
+    school_display = sorted(display_schools)
+    with cmp1:
+        ca = st.selectbox('School A', school_display, key='map_cmp_a')
+    with cmp2:
+        default_b = school_display[1] if len(school_display) > 1 else school_display[0]
+        cb = st.selectbox('School B', school_display,
+                          index=school_display.index(default_b) if default_b in school_display else 0,
+                          key='map_cmp_b')
+    with cmp3:
+        st.markdown('<div style="height:28px;"></div>', unsafe_allow_html=True)
+        if st.button('Compare →', use_container_width=True, type='primary'):
+            st.session_state['compare_a'] = ca
+            st.session_state['compare_b'] = cb
+            st.session_state['nav_to_compare'] = True
+
+    if st.session_state.get('nav_to_compare'):
+        st.session_state['nav_to_compare'] = False
+        st.info('Switch to the **Compare Schools** tab in the sidebar to see the full comparison.')

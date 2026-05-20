@@ -686,6 +686,66 @@ if page == 'School Dashboard':
         else:
             st.info('Need 3+ years of data to generate forecast.')
 
+        # ── Enrollment Forecast ───────────────────────────────────────────
+        st.markdown('<div class="sh">Enrollment Forecast</div>', unsafe_allow_html=True)
+        enroll_hist_x = list(sp['academic_year'])
+        enroll_hist_y = [float(v) if v is not None else None for v in sp['total_undergrad']]
+        enroll_hist_pairs = [(x, y) for x, y in zip(enroll_hist_x, enroll_hist_y) if y is not None]
+
+        if len(enroll_hist_pairs) >= 2:
+            # Project forward using linear trend
+            eh_x, eh_y = zip(*enroll_hist_pairs)
+            years_idx  = list(range(len(eh_x)))
+            proj_start = max(eh_x) + 1
+            proj_years = list(range(proj_start, proj_start + 5))
+            proj_idx   = list(range(len(eh_x), len(eh_x) + 5))
+
+            coeffs = np.polyfit(years_idx, eh_y, 1)
+            proj_y = [max(0, coeffs[0] * i + coeffs[1]) for i in proj_idx]
+
+            # CAGR annotation
+            if eh_y[0] and eh_y[-1] and len(eh_y) > 1:
+                cagr = (eh_y[-1] / eh_y[0]) ** (1 / (len(eh_y) - 1)) - 1
+                cagr_txt = f'Historical CAGR: {cagr:+.1%}/yr'
+            else:
+                cagr_txt = ''
+
+            fig_enr = base_fig(280)
+            fig_enr.add_trace(go.Scatter(
+                x=list(eh_x), y=list(eh_y),
+                mode='lines+markers', name='Observed',
+                line=dict(color=C['AMBER'], width=2.5),
+                marker=dict(size=7, color=C['AMBER'])
+            ))
+            fig_enr.add_trace(go.Scatter(
+                x=[eh_x[-1]] + proj_years,
+                y=[eh_y[-1]] + proj_y,
+                mode='lines+markers', name='Projected',
+                line=dict(color=C['BLUE'], width=2.5, dash='dash'),
+                marker=dict(size=7, color=C['BLUE'])
+            ))
+            xd_e, yd_e = ax(ytitle='Undergrad Enrollment')
+            fig_enr.update_layout(
+                xaxis=xd_e, yaxis=yd_e,
+                annotations=[dict(
+                    text=cagr_txt, xref='paper', yref='paper',
+                    x=0.01, y=0.97, showarrow=False,
+                    font=dict(size=11, color=C['MUTED']),
+                    align='left'
+                )] if cagr_txt else []
+            )
+            st.plotly_chart(fig_enr, use_container_width=True)
+
+            # Projection table
+            proj_df = pd.DataFrame({
+                'Year':       proj_years,
+                'Projected Enrollment': [f'{int(round(v)):,}' for v in proj_y],
+                'vs. Latest': [f'{((v / eh_y[-1]) - 1):+.1%}' for v in proj_y],
+            })
+            st.dataframe(proj_df, use_container_width=True, hide_index=True)
+        else:
+            st.info('Need 2+ years of enrollment data to project.')
+
     with right:
         st.markdown('<div class="sh">Historical Trends</div>',unsafe_allow_html=True)
         fig2 = base_fig(260)

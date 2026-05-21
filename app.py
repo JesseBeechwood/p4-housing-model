@@ -364,6 +364,8 @@ VERIFIED_SWINGS = {
         'Source-confirmed: Duke requires all freshmen on campus (0% first-year off-campus rate per CDS Table 17). UG off-campus rate 19%→14.7% as Duke expanded residential capacity. Total UG 6,435 confirmed in CDS Table 2. Values match source exactly.',
     ('GeorgiaTech', 2025, 'off_campus_demand'):
         'Source-confirmed: GT enrollment grew +16.3% (17,713→20,592 per CDS Table 2) and off-campus rate increased 62%→69% per CDS Table 16. Both values directly verified against 2024-2025 CDS source file.',
+    ('Louisville', 2025, 'off_campus_demand'):
+        'Source-confirmed: On-campus population dropped from ~5,652 to 4,374 students (25.6% of 17,086 UG vs 34.9% prior year), confirmed against institutional housing data showing 4,026 reported beds. Louisville reduced on-campus housing capacity/requirement in 2024-25, structurally shifting ~1,278 students to the off-campus market.',
 }
 
 

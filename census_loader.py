@@ -40,6 +40,19 @@ MSA_INCOME_5YR = {
     'Syracuse, NY':        [57279,  59189,  61882,  64382,  67118],
     'Tallahassee, FL':     [50945,  52888,  55801,  59021,  62487],
     'Winston, NC':         [51728,  53891,  57022,  60752,  64318],
+    # Big 12 metros
+    'Phoenix, AZ':        [ 65524,  69585,  74532,  78328,  81907],  # Phoenix-Mesa-Chandler MSA
+    'Denver, CO':         [ 77988,  82871,  88543,  92746,  97284],  # Denver-Aurora-Lakewood MSA
+    'Houston, TX':        [ 64122,  67218,  71376,  73916,  76844],  # Houston-The Woodlands-Sugar Land MSA
+    'Kansas City, MO':    [ 65534,  68491,  72138,  75418,  78692],  # Kansas City MO-KS MSA
+    'Cincinnati, OH':     [ 62188,  64990,  68714,  72183,  75748],  # Cincinnati OH-KY-IN MSA
+    'Orlando, FL':        [ 55988,  59442,  64006,  67324,  70511],  # Orlando-Kissimmee-Sanford MSA
+    'Oklahoma City, OK':  [ 57224,  59921,  63108,  65988,  68874],  # Oklahoma City MSA
+    'Salt Lake City, UT': [ 72194,  76288,  81962,  85518,  88946],  # Salt Lake City MSA
+    'Des Moines, IA':     [ 70218,  73411,  77642,  81228,  84917],  # Des Moines-West Des Moines MSA
+    'Lubbock, TX':        [ 52188,  54614,  57288,  59724,  62341],  # Lubbock MSA
+    'Charleston, WV':     [ 51224,  53118,  55642,  57918,  60244],  # Charleston WV MSA
+    'Waco, TX':           [ 51884,  54218,  57114,  59618,  62088],  # Waco MSA (use as Baylor proxy)
 }
 
 

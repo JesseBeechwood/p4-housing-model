@@ -440,6 +440,11 @@ SCHOOL_BRAND = {
     'Stanford':             ('#8C1515','#FFFFFF','SU'),
     'Louisville':           ('#AD0000','#000000','UL'),
     'Purdue':               ('#CEB888','#000000','PU'),
+    'ColoradoBoulder':      ('#CFB87C','#000000','CU'),
+    'BYU':                  ('#002E5D','#FFFFFF','BYU'),
+    'Baylor':               ('#154734','#FFB81C','BU'),
+    'KansasState':          ('#512888','#FFFFFF','KSU'),
+    'TCU':                  ('#4D1979','#A3A9AC','TCU'),
 }
 
 def logo_img_html(school, size=48, style=""):
@@ -1802,7 +1807,24 @@ elif page == 'Market Map':
         'UVA':                  dict(lat=38.0336, lon=-78.5080, city='Charlottesville, VA', state='VA', conference='ACC',     region='Southeast'),
         'VirginiaTech':         dict(lat=37.2284, lon=-80.4234, city='Blacksburg, VA',      state='VA', conference='ACC',     region='Southeast'),
         'WakeForest':           dict(lat=36.1340, lon=-80.2773, city='Winston-Salem, NC',   state='NC', conference='ACC',     region='Southeast'),
-        'FloridaState':         dict(lat=30.4417, lon=-84.2979, city='Tallahassee, FL',      state='FL', conference='ACC',     region='Southeast'),
+        'FloridaState':         dict(lat=30.4417, lon=-84.2979, city='Tallahassee, FL',      state='FL', conference='ACC',      region='Southeast'),
+        # Big 12
+        'Arizona':              dict(lat=32.2319, lon=-110.9501,city='Tucson, AZ',          state='AZ', conference='Big 12',   region='West'),
+        'ArizonaState':         dict(lat=33.4255, lon=-111.9400,city='Tempe, AZ',           state='AZ', conference='Big 12',   region='West'),
+        'Baylor':               dict(lat=31.5493, lon=-97.1467, city='Waco, TX',            state='TX', conference='Big 12',   region='South'),
+        'BYU':                  dict(lat=40.2518, lon=-111.6493,city='Provo, UT',           state='UT', conference='Big 12',   region='West'),
+        'Cincinnati':           dict(lat=39.1329, lon=-84.5150, city='Cincinnati, OH',      state='OH', conference='Big 12',   region='Midwest'),
+        'ColoradoBoulder':      dict(lat=40.0076, lon=-105.2659,city='Boulder, CO',         state='CO', conference='Big 12',   region='West'),
+        'Houston':              dict(lat=29.7199, lon=-95.3422, city='Houston, TX',         state='TX', conference='Big 12',   region='South'),
+        'IowaState':            dict(lat=42.0267, lon=-93.6465, city='Ames, IA',            state='IA', conference='Big 12',   region='Midwest'),
+        'Kansas':               dict(lat=38.9543, lon=-95.2558, city='Lawrence, KS',        state='KS', conference='Big 12',   region='Midwest'),
+        'KansasState':          dict(lat=39.1836, lon=-96.5717, city='Manhattan, KS',       state='KS', conference='Big 12',   region='Midwest'),
+        'OklahomaState':        dict(lat=36.1156, lon=-97.0584, city='Stillwater, OK',      state='OK', conference='Big 12',   region='South'),
+        'TCU':                  dict(lat=32.7096, lon=-97.3627, city='Fort Worth, TX',      state='TX', conference='Big 12',   region='South'),
+        'TexasTech':            dict(lat=33.5843, lon=-101.8749,city='Lubbock, TX',         state='TX', conference='Big 12',   region='South'),
+        'UCF':                  dict(lat=28.6024, lon=-81.2001, city='Orlando, FL',         state='FL', conference='Big 12',   region='Southeast'),
+        'Utah':                 dict(lat=40.7649, lon=-111.8421,city='Salt Lake City, UT',  state='UT', conference='Big 12',   region='West'),
+        'WestVirginia':         dict(lat=39.6355, lon=-79.9545, city='Morgantown, WV',      state='WV', conference='Big 12',   region='Northeast'),
     }
 
     # ── Signal → pin color ────────────────────────────────────────────────
@@ -1848,7 +1870,14 @@ elif page == 'Market Map':
         label  = s if s not in ('BostonCollege','GeorgiaTech','NCState','UCBerkeley','UniversityOfMaryland','VirginiaTech','WakeForest','FloridaState') else {
             'BostonCollege':'Boston College','GeorgiaTech':'Georgia Tech',
             'NCState':'NC State','UCBerkeley':'UC Berkeley',
-            'UniversityOfMaryland':'Univ. of Maryland','VirginiaTech':'Virginia Tech','WakeForest':'Wake Forest','FloridaState':'Florida State'
+            'UniversityOfMaryland':'Univ. of Maryland','VirginiaTech':'Virginia Tech','WakeForest':'Wake Forest','FloridaState':'Florida State',
+            'ArizonaState':'Arizona State',
+            'ColoradoBoulder':'Colorado',
+            'IowaState':'Iowa State',
+            'KansasState':'Kansas State',
+            'OklahomaState':'Oklahoma State',
+            'TexasTech':'Texas Tech',
+            'WestVirginia':'West Virginia'
         }[s]
         lats.append(m['lat'])
         lons.append(m['lon'])
@@ -1949,7 +1978,14 @@ elif page == 'Market Map':
             label = sch if sch not in ('BostonCollege','GeorgiaTech','NCState','UCBerkeley','UniversityOfMaryland','VirginiaTech','WakeForest','FloridaState') else {
                 'BostonCollege':'Boston College','GeorgiaTech':'Georgia Tech',
                 'NCState':'NC State','UCBerkeley':'UC Berkeley',
-                'UniversityOfMaryland':'Univ. of Maryland','VirginiaTech':'Virginia Tech','WakeForest':'Wake Forest','FloridaState':'Florida State'}[sch]
+                'UniversityOfMaryland':'Univ. of Maryland','VirginiaTech':'Virginia Tech','WakeForest':'Wake Forest','FloridaState':'Florida State',
+                'ArizonaState':'Arizona State',
+            'ColoradoBoulder':'Colorado',
+            'IowaState':'Iowa State',
+            'KansasState':'Kansas State',
+            'OklahomaState':'Oklahoma State',
+            'TexasTech':'Texas Tech',
+            'WestVirginia':'West Virginia'}[sch]
             with col_:
                 st.markdown(f"""<div class="card" style="text-align:center">
                     <div style="font-size:13px;font-weight:600;color:{C['TEXT']};margin-bottom:10px;">{label}</div>

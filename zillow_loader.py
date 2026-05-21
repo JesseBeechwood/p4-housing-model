@@ -76,6 +76,8 @@ SCHOOL_METRO_MAP = {
     'Stanford':             'San Jose, CA',
     'Cal':                  'San Francisco, CA',
     'SMU':                  'Dallas, TX',
+    'ColoradoBoulder':      'Denver, CO',
+    'OklahomaState':        'Oklahoma City, OK',
 }
 
 def _annual_avg(series):

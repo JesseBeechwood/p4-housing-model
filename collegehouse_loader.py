@@ -32,6 +32,12 @@ def load_collegehouse(school, folder=None):
         'UCBerkeley':           ['ucberkeley','uc_berkeley','ucb','berkeley'],
         'NCState':              ['ncstate','nc_state','ncsu','raleigh-nc'],
         'UNC':                  ['unc','chapel-hill-nc','unc_chapel_hill','chapel_hill'],
+        'Pittsburgh':           ['pittsburgh','pitt','pittsburgh-pa'],
+        'SMU':                  ['smu','dallas-tx','southern_methodist'],
+        'Stanford':             ['stanford','stanford-ca','stanford_university'],
+        'Syracuse':             ['syracuse','syracuse-ny','syracuse_university'],
+        'UVA':                  ['uva','charlottesville-va','university_of_virginia'],
+        'VirginiaTech':         ['virginiatech','virginia_tech','blacksburg-va','vt'],
     }
     aliases = school_aliases.get(school, [school.lower()])
     patterns = []
@@ -264,6 +270,25 @@ def load_all_collegehouse(folder=None):
         'chapel-hill-nc':       'UNC',
         'unc_chapel_hill':      'UNC',
         'chapel_hill':          'UNC',
+        'pittsburgh':           'Pittsburgh',
+        'pitt':                 'Pittsburgh',
+        'pittsburgh-pa':        'Pittsburgh',
+        'smu':                  'SMU',
+        'dallas-tx':            'SMU',
+        'southern_methodist':   'SMU',
+        'stanford':             'Stanford',
+        'stanford-ca':          'Stanford',
+        'stanford_university':  'Stanford',
+        'syracuse':             'Syracuse',
+        'syracuse-ny':          'Syracuse',
+        'syracuse_university':  'Syracuse',
+        'uva':                  'UVA',
+        'charlottesville-va':   'UVA',
+        'university_of_virginia': 'UVA',
+        'virginiatech':         'VirginiaTech',
+        'virginia_tech':        'VirginiaTech',
+        'blacksburg-va':        'VirginiaTech',
+        'vt':                   'VirginiaTech',
     }
     for f in Path(folder).glob('collegehouse_*.xlsx'):
         raw = f.stem.replace('collegehouse_', '').lower()

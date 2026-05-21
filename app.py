@@ -749,6 +749,9 @@ if page == 'School Dashboard':
         else:
             st.info('Need 2+ years of enrollment data to project.')
 
+    # Historical Trends + Cost Trends side by side
+    hist_col, cost_col = st.columns(2)
+    with hist_col:
         st.markdown('<div class="sh">Historical Trends</div>',unsafe_allow_html=True)
         fig2 = base_fig(260)
         yrs  = list(sp['academic_year'])
@@ -763,6 +766,7 @@ if page == 'School Dashboard':
         fig2.update_layout(xaxis=xd,yaxis=yd)
         st.plotly_chart(fig2,use_container_width=True)
 
+    with cost_col:
         st.markdown('<div class="sh" style="font-size:15px">Cost Trends</div>',unsafe_allow_html=True)
         fig3 = base_fig(220)
         for col,label,color in [('tuition_instate','Tuition',C['BLUE']),

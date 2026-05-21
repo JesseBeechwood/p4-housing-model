@@ -156,15 +156,35 @@ def load_zillow(folder=None):
     return results
 
 def score_component(school, zillow_data):
-    """0-1 rent market health score for investment_score computation."""
+    """
+    0-1 rent market health score, normalized across the panel.
+    Formula: 70% long-run trend (%/yr since 2015) + 30% recent 3yr avg YoY.
+    Both components normalized against min/max across all schools in zillow_data.
+    This replaces the old bucket system (above_baseline/accelerating) which gave
+    16 of 18 schools identical scores of 0.60.
+    """
     if not zillow_data or school not in zillow_data:
         return None
-    z = zillow_data[school]
-    above       = z.get('above_baseline', False)
-    accel       = z.get('accelerating', False)
-    rent_growing= (z.get('rent_trend_pct', 0) or 0) > 2.0
-    if above and accel and rent_growing: return 0.85
-    elif above and accel:                return 0.75
-    elif above:                          return 0.60
-    elif accel:                          return 0.50
-    else:                                return 0.25
+
+    def _school_metrics(d):
+        trend = d.get('rent_trend_pct') or 0
+        yoy = d.get('rent_yoy') or {}
+        recent = [yoy.get(y, 0) for y in [2023, 2024, 2025] if yoy.get(y) is not None]
+        recent_avg = float(np.mean(recent)) if recent else trend
+        return trend, recent_avg
+
+    # Collect panel-wide values for normalization
+    all_trends, all_recents = [], []
+    for d in zillow_data.values():
+        t, r = _school_metrics(d)
+        all_trends.append(t)
+        all_recents.append(r)
+
+    t_min, t_max = min(all_trends), max(all_trends)
+    r_min, r_max = min(all_recents), max(all_recents)
+
+    t, r = _school_metrics(zillow_data[school])
+    ts = (t - t_min) / (t_max - t_min) if t_max > t_min else 0.5
+    rs = (r - r_min) / (r_max - r_min) if r_max > r_min else 0.5
+
+    return round(0.7 * ts + 0.3 * rs, 3)

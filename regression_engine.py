@@ -371,20 +371,12 @@ def compute_investment_score(school_data, all_data, zillow_data=None):
         mn, mx = col_vals.min(), col_vals.max()
         scores[comp] = 0.5 if mx == mn else (val - mn) / (mx - mn)
 
-    # Add Zillow rent momentum component if available
-    if zillow_data and school and school in zillow_data:
-        z = zillow_data[school]
-        # Normalize: above_baseline + accelerating = 0.75-1.0
-        #            above_baseline only = 0.5-0.75
-        #            below baseline = 0.0-0.5
-        if z['above_baseline'] and z['accelerating']:
-            scores['rent_momentum'] = 0.85
-        elif z['above_baseline']:
-            scores['rent_momentum'] = 0.60
-        elif z['accelerating']:
-            scores['rent_momentum'] = 0.45
-        else:
-            scores['rent_momentum'] = 0.25
+    # Add Zillow rent momentum component — normalized across panel
+    if zillow_data and school:
+        from zillow_loader import score_component as _zsc
+        z_score = _zsc(school, zillow_data)
+        if z_score is not None:
+            scores['rent_momentum'] = z_score
 
     return float(np.mean(list(scores.values()))) if scores else 0.5
 

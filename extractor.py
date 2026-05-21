@@ -442,7 +442,7 @@ def extract_cds(filepath, school_name, year):
                 if not isinstance(cell, str):
                     continue
                 cl = cell.strip().lower()
-                if 'percentage of need that was met' in cl:
+                if 'percentage of need that was met' in cl or 'percent whose need was met' in cl:
                     for k in range(j+1, min(j+8, len(row))):
                         v = _to_float(h.iloc[i, k])
                         if v is None:
@@ -701,7 +701,7 @@ def _extract_ucb(filepath, school_name, year):
         for j,cell in enumerate(row):
             if not isinstance(cell,str): continue
             cl=cell.strip().lower()
-            if 'percentage of need that was met' in cl:
+            if 'percentage of need that was met' in cl or 'percent whose need was met' in cl:
                 for k in range(j+1,min(j+8,len(row))):
                     v=h.iloc[i,k]
                     if pd.notna(v) and str(v) not in ['nan','']:

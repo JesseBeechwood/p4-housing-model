@@ -509,7 +509,12 @@ def load():
     raw = load_all_cds(str(CDS_FOLDER))
     if raw.empty: return None,None,None
     zillow = load_zillow(Path(__file__).parent)
-    return run_full_analysis(raw, zillow_data=zillow), zillow
+    ch = {}
+    try:
+        ch = load_all_collegehouse(Path(__file__).parent)
+    except Exception:
+        pass
+    return run_full_analysis(raw, zillow_data=zillow, ch_data=ch), zillow
 
 def _unpack():
     result = load()

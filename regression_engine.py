@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
 import warnings
 warnings.filterwarnings('ignore')
+from census_loader import score_rent_burden
 
 FORECAST_YEARS = 5
 
@@ -340,7 +341,7 @@ def forecast_school(school_data, reg3, n_years=FORECAST_YEARS, total_obs=10):
     return forecasts
 
 
-def compute_investment_score(school_data, all_data, zillow_data=None):
+def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=None):
     """
     Score 0-1, normalized against all schools in the panel.
     Components:
@@ -378,6 +379,13 @@ def compute_investment_score(school_data, all_data, zillow_data=None):
         if z_score is not None:
             scores['rent_momentum'] = z_score
 
+    # Add rent burden component (affordability / rent headroom)
+    if ch_data and school:
+        all_schools = list(ch_data.keys())
+        rb_score = score_rent_burden(school, ch_data, all_schools)
+        if rb_score is not None:
+            scores['rent_burden'] = rb_score
+
     return float(np.mean(list(scores.values()))) if scores else 0.5
 
 
@@ -389,7 +397,7 @@ def score_to_signal(score):
     else:               return 'AVOID',       '#A32D2D'
 
 
-def run_full_analysis(raw_panel, zillow_data=None):
+def run_full_analysis(raw_panel, zillow_data=None, ch_data=None):
     panel       = build_panel(raw_panel)
     regressions = run_regressions(panel)
     reg3        = regressions.get('reg3')
@@ -399,7 +407,7 @@ def run_full_analysis(raw_panel, zillow_data=None):
     for school, grp in panel.groupby('school'):
         grp      = grp.sort_values('academic_year')
         forecast = forecast_school(grp, reg3, total_obs=total_obs)
-        score    = compute_investment_score(grp, panel, zillow_data=zillow_data)
+        score    = compute_investment_score(grp, panel, zillow_data=zillow_data, ch_data=ch_data)
         signal, color = score_to_signal(score)
         trends   = estimate_school_trends(grp)
 

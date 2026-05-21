@@ -448,7 +448,7 @@ def extract_cds(filepath, school_name, year):
                         if v is None:
                             continue
                         fv = v/100 if v > 1 else v
-                        if 0.1 < fv < 1.0:
+                        if 0.1 < fv <= 1.0:
                             data['pct_need_met'] = round(fv, 4); break
                 elif 'average financial aid package' in cl and 'avg_aid_package' not in data:
                     for k in range(j+1, min(j+8, len(row))):

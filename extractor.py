@@ -346,7 +346,7 @@ def extract_cds(filepath, school_name, year):
                         v = _to_float(f.iloc[i, k])
                         if v is not None and str(f.iloc[i, k]) not in ['nan', '']:
                             fv = v/100 if v > 1 else v
-                            if 0 < fv < 1:
+                            if 0 <= fv <= 1.0:  # allow 1.0 (e.g. Duke: 100% FTFY required on campus)
                                 vals.append(fv)
                     if len(vals) >= 2:
                         data['pct_ftfy_on_campus'] = round(vals[0], 4)
@@ -638,7 +638,7 @@ def _extract_ucb(filepath, school_name, year):
                         fv=sf(v)
                         if fv is not None:
                             fv=fv/100 if fv>1 else fv
-                            if 0<fv<1: vals.append(fv)
+                            if 0<=fv<=1.0: vals.append(fv)  # allow 1.0 (100% FTFY on campus)
                 if len(vals)>=2: data['pct_ftfy_on_campus']=round(vals[0],4); data['pct_ug_on_campus']=round(vals[1],4)
             elif 'live off campus or commute' in cl and 'pct_ug_off_campus' not in data:
                 vals=[]

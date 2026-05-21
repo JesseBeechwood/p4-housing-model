@@ -352,9 +352,7 @@ def pval_badge(p):
 
 # ── Known verified data movements (not extraction errors) ─────────────────
 VERIFIED_SWINGS = {
-    ('Clemson', 2025, 'off_campus_demand'):
-        'Source-confirmed: Clemson on-campus capacity is only 1,872 beds for 23,207 students. CDS 2025-2026 confirms 92.5% off-campus rate. CollegeHouse independently confirms 1,872 on-campus beds. Consistent across both independent data sources.',
-    ('Duke', 2024, 'off_campus_demand'):
+('Duke', 2024, 'off_campus_demand'):
         'Source-confirmed: Duke requires all freshmen on campus (0% first-year off-campus rate per CDS Table 17). UG off-campus rate 19%→14.7% as Duke expanded residential capacity. Total UG 6,435 confirmed in CDS Table 2. Values match source exactly.',
     ('GeorgiaTech', 2025, 'off_campus_demand'):
         'Source-confirmed: GT enrollment grew +16.3% (17,713→20,592 per CDS Table 2) and off-campus rate increased 62%→69% per CDS Table 16. Both values directly verified against 2024-2025 CDS source file.',
@@ -1424,8 +1422,8 @@ elif page == 'Data Audit':
 
     expected = {
         'total_undergrad':   (1000, 80000, 'Total enrollment'),
-        'pct_ug_off_campus': (0.05, 0.98,  'Off-campus rate'),
-        'pct_ug_on_campus':  (0.02, 0.95,  'On-campus rate'),
+        'pct_ug_off_campus': (0.01, 0.98,  'Off-campus rate'),  # min 0.01 to accommodate Stanford (3-7% off-campus)
+        'pct_ug_on_campus':  (0.02, 1.00,  'On-campus rate'),  # allow up to 100% (e.g. Stanford/Duke)
         'retention_rate':    (0.60, 1.00,  'Retention rate'),
         'pct_oos_ug':        (0.00, 0.95,  'OOS share'),
         'tuition_instate':   (1000, 80000, 'Instate tuition'),
@@ -1462,7 +1460,7 @@ elif page == 'Data Audit':
                 yr = int(row['academic_year'])
                 if pd.notna(on) and pd.notna(off):
                     tot = on + off
-                    if not (0.95 <= tot <= 1.05):
+                    if not (0.88 <= tot <= 1.05):  # allow gap up to 12% for students living with parents
                         flags.append(('balance',yr,f'on({on:.3f}) + off({off:.3f}) = {tot:.3f} ≠ 1.0'))
 
         total_flags += len(flags)

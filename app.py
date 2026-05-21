@@ -413,6 +413,8 @@ SCHOOL_BRAND = {
     'SMU':                  ('#CC0000','#354CA1','SMU'),
     'Stanford':             ('#8C1515','#FFFFFF','STAN'),
     'Syracuse':             ('#F76900','#FFFFFF','SYR'),
+    'UVA':                  ('#232D4B','#F84C1E','UVA'),
+    'VirginiaTech':         ('#861F41','#CF4420','VT'),
     'Houston':              ('#C8102E','#FFFFFF','UH'),
     'TexasAM':              ('#500000','#FFFFFF','A&M'),
     'Texas':                ('#BF5700','#FFFFFF','UT'),
@@ -1772,6 +1774,8 @@ elif page == 'Market Map':
         'UCBerkeley':           dict(lat=37.8724, lon=-122.2595,city='Berkeley, CA',        state='CA', conference='ACC',     region='West'),
         'UNC':                  dict(lat=35.9049, lon=-79.0469, city='Chapel Hill, NC',     state='NC', conference='ACC',     region='Southeast'),
         'UniversityOfMaryland': dict(lat=38.9869, lon=-76.9426, city='College Park, MD',   state='MD', conference='Big Ten', region='Northeast'),
+        'UVA':                  dict(lat=38.0336, lon=-78.5080, city='Charlottesville, VA', state='VA', conference='ACC',     region='Southeast'),
+        'VirginiaTech':         dict(lat=37.2284, lon=-80.4234, city='Blacksburg, VA',      state='VA', conference='ACC',     region='Southeast'),
     }
 
     # ── Signal → pin color ────────────────────────────────────────────────
@@ -1814,10 +1818,10 @@ elif page == 'Market Map':
         signal = sr.get('signal', 'N/A')
         score  = sr.get('investment_score', 0) or 0
         demand = int(sr.get('off_campus_demand', 0) or 0)
-        label  = s if s not in ('BostonCollege','GeorgiaTech','NCState','UCBerkeley','UniversityOfMaryland') else {
+        label  = s if s not in ('BostonCollege','GeorgiaTech','NCState','UCBerkeley','UniversityOfMaryland','VirginiaTech') else {
             'BostonCollege':'Boston College','GeorgiaTech':'Georgia Tech',
             'NCState':'NC State','UCBerkeley':'UC Berkeley',
-            'UniversityOfMaryland':'Univ. of Maryland'
+            'UniversityOfMaryland':'Univ. of Maryland','VirginiaTech':'Virginia Tech'
         }[s]
         lats.append(m['lat'])
         lons.append(m['lon'])
@@ -1915,10 +1919,10 @@ elif page == 'Market Map':
         for col_, sch in [(cc1, ca), (cc2, cb)]:
             sr   = school_results[sch]
             sig  = sr['signal']; sco = sr['investment_score']; scol = sr['signal_color']
-            label = sch if sch not in ('BostonCollege','GeorgiaTech','NCState','UCBerkeley','UniversityOfMaryland') else {
+            label = sch if sch not in ('BostonCollege','GeorgiaTech','NCState','UCBerkeley','UniversityOfMaryland','VirginiaTech') else {
                 'BostonCollege':'Boston College','GeorgiaTech':'Georgia Tech',
                 'NCState':'NC State','UCBerkeley':'UC Berkeley',
-                'UniversityOfMaryland':'Univ. of Maryland'}[sch]
+                'UniversityOfMaryland':'Univ. of Maryland','VirginiaTech':'Virginia Tech'}[sch]
             with col_:
                 st.markdown(f"""<div class="card" style="text-align:center">
                     <div style="font-size:13px;font-weight:600;color:{C['TEXT']};margin-bottom:10px;">{label}</div>

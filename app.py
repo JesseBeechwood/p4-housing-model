@@ -142,17 +142,18 @@ div[data-testid="stMetric"] div[data-testid="stMetricValue"]{
 /* ── Thesis Blocks ────────────────────────────────────────────────── */
 .thesis{
     background:#0D0D0F;
-    border:1px solid rgba(200,170,125,0.13);
-    padding:20px 22px;
-    margin:12px 0;
+    border-top:2px solid rgba(200,170,125,0.35);
+    border-left:none;border-right:none;border-bottom:none;
+    padding:16px 20px 18px;
 }
 .thesis-label{
-    font-size:8px;
+    font-size:7.5px;
     font-weight:700;
-    letter-spacing:.22em;
+    letter-spacing:.25em;
     text-transform:uppercase;
     color:#C8AA7D;
-    margin-bottom:6px;
+    margin-bottom:8px;
+    font-family:'Manrope',sans-serif;
 }
 .thesis-text{
     font-size:13px;
@@ -161,20 +162,20 @@ div[data-testid="stMetric"] div[data-testid="stMetricValue"]{
     line-height:1.7;
 }
 .thesis-value{
-    font-size:22px;
-    font-weight:600;
+    font-size:26px;
+    font-weight:300;
     color:#F5F1EA;
     font-family:'Manrope',sans-serif;
-    margin-bottom:4px;
-    letter-spacing:-.01em;
-    line-height:1.2;
+    margin-bottom:5px;
+    letter-spacing:-.02em;
+    line-height:1.1;
 }
 .thesis-note{
-    font-size:10px;
-    color:#4A4035;
+    font-size:9.5px;
+    color:#3A3028;
     font-family:'Inter',sans-serif;
     line-height:1.4;
-    margin-top:4px;
+    margin-top:3px;
 }
 
 /* ── Number Display ──────────────────────────────────────────────── */
@@ -686,9 +687,10 @@ if page == 'School Dashboard':
     stat3 = _fmt_stat('Occupancy Rate',
         f"{_occ:.1%}" if _occ else '—',
         'Current purpose-built occupancy')
-    stat4 = _fmt_stat('New Supply Pipeline',
-        f"{_pipe:.1%}" if _pipe else '0.0%',
-        'Beds under construction as % of existing stock')
+    _pre_lease = _ch.get('pre_lease_rate')
+    stat4 = _fmt_stat('Pre-Lease Rate',
+        f"{_pre_lease:.1%}" if _pre_lease else '—',
+        'Share of next year beds already signed')
     stat5 = _fmt_stat('Avg Rent / Bed',
         f"${_rent_bed:,.0f}/mo" if _rent_bed else '—',
         'Purpose-built asking rent')
@@ -697,8 +699,8 @@ if page == 'School Dashboard':
         'Zillow metro annual avg since 2015')
 
     thesis_html = (
-        '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1px;'
-        'margin:24px 0;background:rgba(200,170,125,0.07);">'
+        '<div style="display:grid;grid-template-columns:repeat(6,1fr);'
+        'gap:0;margin:20px 0 0;border:1px solid rgba(200,170,125,0.12);">'
         + stat1 + stat2 + stat3 + stat4 + stat5 + stat6
         + '</div>'
     )
@@ -706,11 +708,11 @@ if page == 'School Dashboard':
 
     c1,c2,c3,c4,c5,c6 = st.columns(6)
     with c1: st.metric('Undergrads',fmt(sr['total_undergrad']))
-    with c2: st.metric('Off-Campus Beds',fmt(sr['off_campus_demand']))
-    with c3: st.metric('Off-Campus Rate',fmt(sr['pct_ug_off_campus'],'pct'))
-    with c4: st.metric('Retention',fmt(sr['retention_rate'],'pct'))
-    with c5: st.metric('OOS Share',fmt(sr['pct_oos_ug'],'pct'))
-    with c6: st.metric('Instate Tuition',fmt(sr['tuition_instate'],'money'))
+    with c2: st.metric('Off-Campus Rate',fmt(sr['pct_ug_off_campus'],'pct'))
+    with c3: st.metric('Retention',fmt(sr['retention_rate'],'pct'))
+    with c4: st.metric('OOS Share',fmt(sr['pct_oos_ug'],'pct'))
+    with c5: st.metric('Instate Tuition',fmt(sr['tuition_instate'],'money'))
+    with c6: st.metric('Avg Aid Package',fmt(sr.get('avg_aid_package'),'money'))
     st.markdown('<br>',unsafe_allow_html=True)
 
     left,right = st.columns(2)

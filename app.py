@@ -709,6 +709,38 @@ if page == 'School Dashboard':
     )
     st.markdown(thesis_html, unsafe_allow_html=True)
 
+    # ── Shadow market context box ─────────────────────────────────────────
+    _demand_val   = sr.get('off_campus_demand') or 0
+    _active_val   = (_ch.get('active_supply_beds') or _ch.get('purpose_built_beds') or 0)
+    _shadow_props = _ch.get('shadow_market_properties') or 0
+    _shadow_rent  = _ch.get('shadow_market_avg_rate')
+    _pb_rent      = _ch.get('avg_rent_per_bed')
+
+    if _demand_val and _active_val and _active_val < _demand_val:
+        _in_conv   = _demand_val - _active_val
+        _pb_share  = _active_val / _demand_val
+        _city      = SCHOOL_META.get(selected, {}).get('city', 'the local metro') if 'SCHOOL_META' in dir() else 'the local metro'
+        _city_name = _city.split(',')[0] if ',' in _city else _city
+
+        _premium_txt = ''
+        if _shadow_rent and _pb_rent and _shadow_rent > 0:
+            _premium = (_pb_rent - _shadow_rent) / _shadow_rent * 100
+            _premium_txt = (f' Purpose-built commands a <strong style="color:{C["GOLD"]};">'
+                           f'${_pb_rent - _shadow_rent:,.0f}/mo ({_premium:+.0f}%)</strong> premium over conventional.')
+
+        st.markdown(
+            f'<div style="background:{C["CARD"]};border-left:3px solid {C["GOLD_DIM"]};'
+            f'padding:10px 16px;margin:0 0 12px;font-size:11px;color:{C["MUTED"]};line-height:1.6;">'
+            f'<strong style="color:{C["IVORY"]};">Why is PB supply less than demand?</strong> &nbsp;'
+            f'Of the <strong style="color:{C["IVORY"]};">{int(_demand_val):,} students</strong> needing off-campus housing, '
+            f'<strong style="color:{C["IVORY"]};">{int(_active_val):,}</strong> ({_pb_share:.0%}) are in purpose-built student housing '
+            f'and <strong style="color:{C["IVORY"]};">{int(_in_conv):,}</strong> ({1-_pb_share:.0%}) live in '
+            f"{_city_name}'s conventional rental market - standard apartments not purpose-built for students."
+            + (f' CollegeHouse tracks {_shadow_props:,} conventional properties near campus.' if _shadow_props else '')
+            + _premium_txt
+            + f'</div>',
+            unsafe_allow_html=True)
+
     c1,c2,c3,c4,c5,c6 = st.columns(6)
     with c1: st.metric('Undergrads',fmt(sr['total_undergrad']))
     with c2: st.metric('Off-Campus Rate',fmt(sr['pct_ug_off_campus'],'pct'))

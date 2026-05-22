@@ -130,6 +130,13 @@ def load_collegehouse(school, folder=None):
                 result['properties'] = prop_summary.to_dict('records')
                 result['property_count_detail'] = len(prop_summary)
 
+                # Active supply = beds in properties that are open (occ > 0)
+                # Zero-occupancy properties are pipeline/not-yet-open — exclude from supply
+                active = prop_summary[prop_summary['occupancy'] > 0.0]
+                pipeline_from_props = prop_summary[prop_summary['occupancy'] == 0.0]
+                result['active_supply_beds'] = int(active['total_beds'].sum())
+                result['pipeline_beds_zero_occ'] = int(pipeline_from_props['total_beds'].sum())
+
                 # Avg rent across operating properties
                 operating = prop_summary[prop_summary['occupancy'] > 0.05]
                 if not operating.empty:
@@ -153,6 +160,8 @@ def load_collegehouse(school, folder=None):
 
         # ── Computed metrics ──────────────────────────────────────────────
         pb  = result.get('purpose_built_beds', 0) or 0
+        # Use active supply (excludes zero-occ pipeline properties) for BtS calculation
+        active_pb = result.get('active_supply_beds', pb) or pb
         oc  = result.get('on_campus_beds', 0) or 0
         enr = result.get('ftug_latest', 0) or 0
 
@@ -176,7 +185,7 @@ def load_collegehouse(school, folder=None):
             result['market_total_ftug']            = int(market_total_ftug)
 
             # Market-level bed-to-student ratio (how tight is the whole market)
-            market_bts = round(pb / market_need_off, 3) if market_need_off > 0 else None
+            market_bts = round(active_pb / market_need_off, 3) if market_need_off > 0 else None
             result['bed_to_student_ratio']        = market_bts
             result['bed_to_student_ratio_market'] = market_bts
 
@@ -187,7 +196,7 @@ def load_collegehouse(school, folder=None):
         elif pb > 0 and oc > 0 and enr > 0:
             students_needing_off_campus = max(enr - oc, 1)
             result['students_needing_off_campus'] = students_needing_off_campus
-            result['bed_to_student_ratio'] = round(pb / students_needing_off_campus, 3)
+            result['bed_to_student_ratio'] = round(active_pb / students_needing_off_campus, 3)
             if result['bed_to_student_ratio']:
                 result['market_saturation'] = 'Oversupplied' if result['bed_to_student_ratio'] > 1.1 else \
                                               'Balanced'     if result['bed_to_student_ratio'] > 0.9 else \
@@ -195,8 +204,10 @@ def load_collegehouse(school, folder=None):
 
         # Pipeline pressure: beds under construction as % of existing stock
         uc = result.get('beds_under_construction', 0) or 0
-        if pb > 0 and uc is not None:
-            result['pipeline_pct'] = round(uc / pb, 4)
+        zero_occ_beds = result.get('pipeline_beds_zero_occ', 0) or 0
+        total_pipeline = max(uc, zero_occ_beds)  # use whichever is larger — more accurate
+        if active_pb > 0 and total_pipeline is not None:
+            result['pipeline_pct'] = round(total_pipeline / active_pb, 4)
 
         return result
 

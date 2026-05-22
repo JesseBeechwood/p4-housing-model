@@ -682,9 +682,11 @@ if page == 'School Dashboard':
     stat1 = _fmt_stat('Off-Campus Demand',
         f"{int(_demand):,} beds" if _demand else '—',
         f"{sr.get('pct_ug_off_campus',0):.0%} of undergrads live off campus" if sr.get('pct_ug_off_campus') else '')
-    stat2 = _fmt_stat('Purpose-Built Supply',
-        f"{int(_pb_beds):,} beds" if _pb_beds else '—',
-        f"Bed-to-student ratio: {_bts:.2f}" if _bts else '')
+    _active_beds = _ch.get('active_supply_beds') or _pb_beds
+    _pipeline_beds = _ch.get('pipeline_beds_zero_occ', 0) or 0
+    stat2 = _fmt_stat('Active PB Supply',
+        f"{int(_active_beds):,} beds" if _active_beds else '—',
+        f"BtS: {_bts:.2f}  ·  {_pipeline_beds:,} beds pre-opening" if (_bts and _pipeline_beds) else (f"Bed-to-student ratio: {_bts:.2f}" if _bts else ''))
     stat3 = _fmt_stat('Occupancy Rate',
         f"{_occ:.1%}" if _occ else '—',
         'Current purpose-built occupancy')

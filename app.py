@@ -141,19 +141,20 @@ div[data-testid="stMetric"] div[data-testid="stMetricValue"]{
 
 /* ── Thesis Blocks ────────────────────────────────────────────────── */
 .thesis{
-    background:#0D0D0F;
-    border-top:2px solid rgba(200,170,125,0.35);
-    border-left:none;border-right:none;border-bottom:none;
-    padding:16px 20px 18px;
+    background:#111113;
+    border:1px solid rgba(200,170,125,0.09);
+    border-top:2px solid #C8AA7D;
+    border-radius:0px;
+    padding:20px 18px 16px;
 }
 .thesis-label{
-    font-size:7.5px;
-    font-weight:700;
-    letter-spacing:.25em;
-    text-transform:uppercase;
-    color:#C8AA7D;
-    margin-bottom:8px;
+    color:#7A6E5F;
+    font-size:9px;
     font-family:'Manrope',sans-serif;
+    text-transform:uppercase;
+    letter-spacing:.18em;
+    font-weight:600;
+    margin-bottom:8px;
 }
 .thesis-text{
     font-size:13px;
@@ -162,18 +163,18 @@ div[data-testid="stMetric"] div[data-testid="stMetricValue"]{
     line-height:1.7;
 }
 .thesis-value{
+    color:#F5F1EA;
     font-size:26px;
     font-weight:300;
-    color:#F5F1EA;
     font-family:'Manrope',sans-serif;
+    letter-spacing:-.01em;
     margin-bottom:5px;
-    letter-spacing:-.02em;
     line-height:1.1;
 }
 .thesis-note{
     font-size:9.5px;
-    color:#3A3028;
-    font-family:'Inter',sans-serif;
+    color:#4A4035;
+    font-family:'Manrope',sans-serif;
     line-height:1.4;
     margin-top:3px;
 }

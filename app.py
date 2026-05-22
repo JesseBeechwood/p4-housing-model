@@ -729,7 +729,7 @@ if page == 'School Dashboard':
                            f'${_pb_rent - _shadow_rent:,.0f}/mo ({_premium:+.0f}%)</strong> premium over conventional.')
 
         st.markdown(
-            f'<div style="background:{C["CARD"]};border-left:3px solid {C["GOLD_DIM"]};'
+            f'<div style="background:{C["CARD"]};border-left:3px solid {C["GOLD"]};'
             f'padding:10px 16px;margin:0 0 12px;font-size:11px;color:{C["MUTED"]};line-height:1.6;">'
             f'<strong style="color:{C["IVORY"]};">Why is PB supply less than demand?</strong> &nbsp;'
             f'Of the <strong style="color:{C["IVORY"]};">{int(_demand_val):,} students</strong> needing off-campus housing, '

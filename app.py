@@ -530,8 +530,9 @@ def _unpack():
         ipeds_df = load_ipeds(Path(__file__).parent / 'ipeds_2024.csv')
         if ipeds_df is not None and not ipeds_df.empty:
             for _, row in ipeds_df.iterrows():
-                sr = get_ipeds_school_result(row, panel)
-                all_school_results[row['school']] = sr
+                if row['school'] not in school_results:   # never overwrite CDS data
+                    sr = get_ipeds_school_result(row, panel)
+                    all_school_results[row['school']] = sr
     except Exception:
         pass
     # Load CollegeHouse data

@@ -237,6 +237,9 @@ def run_regressions(panel):
     return results
 
 
+
+
+
 def forecast_school(school_data, reg3, n_years=FORECAST_YEARS, total_obs=10):
     """
     5-year forecast using ONLY school-specific historical trends.
@@ -341,6 +344,7 @@ def forecast_school(school_data, reg3, n_years=FORECAST_YEARS, total_obs=10):
     return forecasts
 
 
+
 def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=None):
     """
     Investment score 0-1: four-component model built from what the data shows
@@ -403,14 +407,12 @@ def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=No
         pipe = ch.get('pipeline_pct', 0) or 0
 
         if occ is not None and bts is not None:
-            # Collect panel values for normalization
             all_occ  = [ch_data[s].get('occupancy_rate')         for s in ch_data if ch_data[s].get('occupancy_rate') is not None]
             all_bts  = [ch_data[s].get('bed_to_student_ratio')   for s in ch_data if ch_data[s].get('bed_to_student_ratio') is not None]
             all_pipe = [ch_data[s].get('pipeline_pct', 0) or 0   for s in ch_data]
-
             n_occ  = norm_custom(occ,  all_occ)
-            n_bts  = norm_custom(bts,  all_bts,  invert=True)   # lower BtS = better
-            n_pipe = norm_custom(pipe, all_pipe, invert=True)   # lower pipeline = better
+            n_bts  = norm_custom(bts,  all_bts,  invert=True)
+            n_pipe = norm_custom(pipe, all_pipe, invert=True)
 
             if n_occ is not None and n_bts is not None and n_pipe is not None:
                 # Weighted supply score:
@@ -426,7 +428,6 @@ def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=No
 
     demand_score = None
     if demand_abs is not None and off_rate is not None:
-        # Log-normalize demand to prevent size domination
         all_demand = np.log1p(all_data['off_campus_demand'].dropna().values)
         n_demand   = float(np.clip((np.log1p(demand_abs) - all_demand.min()) /
                                    (all_demand.max() - all_demand.min() + 1e-9), 0, 1))

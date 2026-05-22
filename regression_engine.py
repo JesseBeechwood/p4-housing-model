@@ -237,140 +237,6 @@ def run_regressions(panel):
     return results
 
 
-
-def compute_forecast_ci(school_data, n_years=5):
-    """
-    Statistically grounded confidence intervals on the 5-year demand forecast.
-
-    Uncertainty comes from two sources:
-      1. Enrollment trend: uses the standard error of the regression slope
-         to build a 90% CI on future enrollment via t-distribution.
-      2. Off-campus rate: uses the historical standard deviation of the rate
-         to build a 90% CI assuming the rate stays within its observed range.
-
-    Returns dict with per-year (lo, mid, hi) and a confidence tier:
-      HIGH   — p<0.05 enrollment trend, rate std<0.02, n>=4 years
-      MEDIUM — p<0.15 enrollment trend OR rate std<0.04
-      LOW    — trend not statistically reliable or <3 years of data
-    """
-    from scipy import stats as _stats
-
-    grp = school_data.sort_values('academic_year').copy()
-    ev  = grp[['academic_year', 'total_undergrad']].dropna()
-    rv  = grp['pct_ug_off_campus'].dropna()
-
-    rate_now = float(rv.iloc[-1]) if len(rv) else 0.05
-    rate_std = float(rv.std())    if len(rv) >= 2 else 0.02
-
-    enrl_now = float(ev['total_undergrad'].iloc[-1]) if len(ev) else 0.0
-    slope = intercept = se = 0.0
-    p_enroll = 1.0
-
-    if len(ev) >= 3:
-        slope, intercept, r_val, p_enroll, se = _stats.linregress(
-            ev['academic_year'].values,
-            np.log(ev['total_undergrad'].values)
-        )
-
-    # 90% CI on slope (t-distribution, df = n-2)
-    n_obs = len(ev)
-    t_crit = _stats.t.ppf(0.95, df=max(n_obs - 2, 1))  # one-sided 95% = two-sided 90%
-    slope_lo = slope - t_crit * se
-    slope_hi = slope + t_crit * se
-
-    # Rate 90% CI — clip to valid range
-    rate_lo = max(0.01, rate_now - 1.645 * rate_std)
-    rate_hi = min(0.98, rate_now + 1.645 * rate_std)
-
-    # Confidence tier
-    if p_enroll < 0.05 and rate_std < 0.02 and n_obs >= 4:
-        tier = 'HIGH'
-    elif p_enroll < 0.15 and n_obs >= 3:
-        tier = 'MEDIUM'
-    else:
-        tier = 'LOW'
-
-    year_cis = {}
-    for yr in range(1, n_years + 1):
-        enrl_mid = enrl_now * np.exp(slope    * yr)
-        enrl_lo  = enrl_now * np.exp(slope_lo * yr)
-        enrl_hi  = enrl_now * np.exp(slope_hi * yr)
-
-        demand_mid = enrl_mid * rate_now
-        demand_lo  = max(0, enrl_lo * rate_lo)
-        demand_hi  = enrl_hi * rate_hi
-
-        year_cis[yr] = {
-            'lo':  int(demand_lo),
-            'mid': int(demand_mid),
-            'hi':  int(demand_hi),
-        }
-
-    return {
-        'year_cis':    year_cis,
-        'tier':        tier,
-        'p_enroll':    round(p_enroll, 4),
-        'enroll_se':   round(se, 5),
-        'rate_std':    round(rate_std, 4),
-        'n_years_data': n_obs,
-        'enroll_trend_pct': round((np.exp(slope) - 1) * 100, 2),
-    }
-
-
-def compute_score_ci(school_data, panel, zillow_data=None, ch_data=None, n_boot=None, _norms=None):
-    """
-    Analytic confidence interval on the investment score — O(1), no iterations.
-
-    Approximates CI width from the historical variance of the three CDS inputs
-    that drive the demand and growth score components (off-campus rate, OOS share,
-    retention). Each variable contributes proportionally to its component weight
-    in the score. The result is scaled so that panel-average variance produces
-    a CI width consistent with what a full bootstrap would yield (~0.04).
-
-    This is intentionally fast — the score CI is a display signal about data
-    reliability, not a precise statistical interval. Stable data -> narrow band.
-    Noisy data -> wide band. That relationship is preserved analytically.
-    """
-    grp = school_data.sort_values('academic_year').copy()
-    central = compute_investment_score(grp, panel, zillow_data=zillow_data, ch_data=ch_data, _norms=_norms)
-
-    off_std = float(grp['pct_ug_off_campus'].std()) if grp['pct_ug_off_campus'].notna().sum() >= 2 else 0.015
-    oos_std = float(grp['pct_oos_ug'].std())        if grp['pct_oos_ug'].notna().sum() >= 2        else 0.012
-    ret_std = float(grp['retention_rate'].std())    if grp['retention_rate'].notna().sum() >= 2    else 0.006
-    n_yrs   = int(grp['academic_year'].notna().sum())
-
-    # Weight each variance by its contribution to the score components
-    # off_campus_rate affects Demand (30%) + Growth (20%) = 50% of score
-    # oos_share affects Demand (30% x 20%) = 6% of score
-    # retention barely affects Growth (<5%) — small contribution
-    # Combine as root-sum-of-squares, scaled to score units
-    composite_std = float(np.sqrt(
-        (off_std * 0.50) ** 2 +
-        (oos_std * 0.06) ** 2 +
-        (ret_std * 0.05) ** 2
-    ))
-
-    # Scale factor calibrated so panel-average std (~0.025 off, ~0.015 oos, ~0.010 ret)
-    # produces a CI width of ~0.04, matching bootstrap results
-    scale = 3.5
-    half_width = composite_std * scale
-
-    # Widen for fewer years of data (less information = more uncertainty)
-    year_penalty = max(0, (4 - n_yrs) * 0.008)
-    half_width  += year_penalty
-
-    half_width = float(np.clip(half_width, 0.005, 0.12))
-
-    lo = float(np.clip(central - half_width, 0.0, 1.0))
-    hi = float(np.clip(central + half_width, 0.0, 1.0))
-
-    return {
-        'lo':      round(lo, 3),
-        'hi':      round(hi, 3),
-        'central': round(central, 3),
-        'width':   round(hi - lo, 3),
-    }
-
 def forecast_school(school_data, reg3, n_years=FORECAST_YEARS, total_obs=10):
     """
     5-year forecast using ONLY school-specific historical trends.
@@ -475,79 +341,7 @@ def forecast_school(school_data, reg3, n_years=FORECAST_YEARS, total_obs=10):
     return forecasts
 
 
-def _precompute_panel_norms(all_data, ch_data=None, zillow_data=None):
-    """
-    Pre-compute all panel-level normalization values once.
-    Pass the result into compute_investment_score to avoid recomputing
-    on every school call.
-    """
-    from scipy import stats as _stats
-
-    norms = {}
-
-    # Demand normalization
-    if 'off_campus_demand' in all_data.columns:
-        d = np.log1p(all_data['off_campus_demand'].dropna().values)
-        norms['demand_log_min'] = float(d.min())
-        norms['demand_log_max'] = float(d.max())
-    if 'pct_ug_off_campus' in all_data.columns:
-        v = all_data['pct_ug_off_campus'].dropna()
-        norms['off_rate_min'] = float(v.min()); norms['off_rate_max'] = float(v.max())
-    if 'pct_oos_ug' in all_data.columns:
-        v = all_data['pct_oos_ug'].dropna()
-        norms['oos_min'] = float(v.min()); norms['oos_max'] = float(v.max())
-
-    # Supply normalization
-    if ch_data:
-        all_occ  = [ch_data[s].get('occupancy_rate')       for s in ch_data if ch_data[s].get('occupancy_rate') is not None]
-        all_bts  = [ch_data[s].get('bed_to_student_ratio') for s in ch_data if ch_data[s].get('bed_to_student_ratio') is not None]
-        all_pipe = [ch_data[s].get('pipeline_pct', 0) or 0 for s in ch_data]
-        norms['occ_min']  = min(all_occ)  if all_occ  else 0.0
-        norms['occ_max']  = max(all_occ)  if all_occ  else 1.0
-        norms['bts_min']  = min(all_bts)  if all_bts  else 0.0
-        norms['bts_max']  = max(all_bts)  if all_bts  else 3.0
-        norms['pipe_min'] = min(all_pipe) if all_pipe else 0.0
-        norms['pipe_max'] = max(all_pipe) if all_pipe else 1.0
-
-    # Growth normalization — run linregress once per school across panel
-    all_weighted_trends = []
-    all_rate_trends = []
-    for s_school in all_data['school'].unique():
-        s_grp = all_data[all_data['school'] == s_school].sort_values('academic_year')
-        s_ev  = s_grp[['academic_year', 'total_undergrad']].dropna()
-        if len(s_ev) >= 3:
-            s_sl, _, _, s_p, _ = _stats.linregress(
-                s_ev['academic_year'].values,
-                np.log(s_ev['total_undergrad'].values))
-            s_et = (np.exp(s_sl) - 1) * 100
-            s_cw = 1.0 if s_p < 0.05 else (0.5 if s_p < 0.15 else 0.25)
-            all_weighted_trends.append(s_et * s_cw)
-        s_rv = s_grp[['academic_year', 'pct_ug_off_campus']].dropna()
-        if len(s_rv) >= 3 and s_rv['pct_ug_off_campus'].std() > 0.005:
-            s_rsl, _, _, _, _ = _stats.linregress(
-                s_rv['academic_year'].values,
-                s_rv['pct_ug_off_campus'].values)
-            all_rate_trends.append(s_rsl * 100)
-
-    if all_weighted_trends:
-        norms['trend_min'] = min(all_weighted_trends)
-        norms['trend_max'] = max(all_weighted_trends)
-    if all_rate_trends:
-        norms['rate_trend_min'] = min(all_rate_trends)
-        norms['rate_trend_max'] = max(all_rate_trends)
-
-    # Zillow normalization
-    if zillow_data:
-        from zillow_loader import score_component as _zsc
-        z_scores = [_zsc(s, zillow_data) for s in zillow_data]
-        z_scores = [z for z in z_scores if z is not None]
-        norms['zillow_min'] = min(z_scores) if z_scores else 0.0
-        norms['zillow_max'] = max(z_scores) if z_scores else 1.0
-
-    return norms
-
-
-def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=None, _norms=None):
+def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=None):
     """
     Investment score 0-1: four-component model built from what the data shows
     actually matters for student housing market selection.
@@ -609,21 +403,14 @@ def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=No
         pipe = ch.get('pipeline_pct', 0) or 0
 
         if occ is not None and bts is not None:
-            if _norms:
-                def _n(v, mn, mx, invert=False):
-                    if mx == mn: return 0.5
-                    s = float(np.clip((v - mn) / (mx - mn), 0, 1))
-                    return 1.0 - s if invert else s
-                n_occ  = _n(occ,  _norms.get('occ_min',0),  _norms.get('occ_max',1))
-                n_bts  = _n(bts,  _norms.get('bts_min',0),  _norms.get('bts_max',3),  invert=True)
-                n_pipe = _n(pipe, _norms.get('pipe_min',0), _norms.get('pipe_max',1), invert=True)
-            else:
-                all_occ  = [ch_data[s].get('occupancy_rate')         for s in ch_data if ch_data[s].get('occupancy_rate') is not None]
-                all_bts  = [ch_data[s].get('bed_to_student_ratio')   for s in ch_data if ch_data[s].get('bed_to_student_ratio') is not None]
-                all_pipe = [ch_data[s].get('pipeline_pct', 0) or 0   for s in ch_data]
-                n_occ  = norm_custom(occ,  all_occ)
-                n_bts  = norm_custom(bts,  all_bts,  invert=True)
-                n_pipe = norm_custom(pipe, all_pipe, invert=True)
+            # Collect panel values for normalization
+            all_occ  = [ch_data[s].get('occupancy_rate')         for s in ch_data if ch_data[s].get('occupancy_rate') is not None]
+            all_bts  = [ch_data[s].get('bed_to_student_ratio')   for s in ch_data if ch_data[s].get('bed_to_student_ratio') is not None]
+            all_pipe = [ch_data[s].get('pipeline_pct', 0) or 0   for s in ch_data]
+
+            n_occ  = norm_custom(occ,  all_occ)
+            n_bts  = norm_custom(bts,  all_bts,  invert=True)   # lower BtS = better
+            n_pipe = norm_custom(pipe, all_pipe, invert=True)   # lower pipeline = better
 
             if n_occ is not None and n_bts is not None and n_pipe is not None:
                 # Weighted supply score:
@@ -639,21 +426,12 @@ def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=No
 
     demand_score = None
     if demand_abs is not None and off_rate is not None:
-        if _norms and 'demand_log_min' in _norms:
-            d_mn = _norms['demand_log_min']; d_mx = _norms['demand_log_max']
-            n_demand = float(np.clip((np.log1p(demand_abs) - d_mn) / (d_mx - d_mn + 1e-9), 0, 1))
-            def _np2(v, mn, mx, invert=False):
-                if mx == mn: return 0.5
-                s = float(np.clip((v - mn) / (mx - mn), 0, 1))
-                return 1.0 - s if invert else s
-            n_off_rate = _np2(off_rate, _norms.get('off_rate_min',0), _norms.get('off_rate_max',1))
-            n_oos = _np2(oos, _norms.get('oos_min',0), _norms.get('oos_max',1)) if oos is not None else 0.5
-        else:
-            all_demand = np.log1p(all_data['off_campus_demand'].dropna().values)
-            n_demand   = float(np.clip((np.log1p(demand_abs) - all_demand.min()) /
-                                       (all_demand.max() - all_demand.min() + 1e-9), 0, 1))
-            n_off_rate = norm_panel(off_rate, 'pct_ug_off_campus')
-            n_oos      = norm_panel(oos, 'pct_oos_ug') if oos is not None else 0.5
+        # Log-normalize demand to prevent size domination
+        all_demand = np.log1p(all_data['off_campus_demand'].dropna().values)
+        n_demand   = float(np.clip((np.log1p(demand_abs) - all_demand.min()) /
+                                   (all_demand.max() - all_demand.min() + 1e-9), 0, 1))
+        n_off_rate = norm_panel(off_rate, 'pct_ug_off_campus')
+        n_oos      = norm_panel(oos, 'pct_oos_ug') if oos is not None else 0.5
 
         demand_score = 0.50 * n_demand + 0.30 * n_off_rate + 0.20 * n_oos
 
@@ -680,35 +458,30 @@ def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=No
             )
             rate_trend = r_slope * 100  # scale to same magnitude as enroll_trend_pct
 
-        # Use pre-computed norms if available, else recompute
-        if _norms and 'trend_min' in _norms:
-            def _ng(v, mn, mx):
-                if mx == mn: return 0.5
-                return float(np.clip((v - mn) / (mx - mn), 0, 1))
-            n_enroll = _ng(weighted_trend, _norms['trend_min'], _norms['trend_max'])
-            n_rate   = _ng(rate_trend, _norms.get('rate_trend_min', rate_trend),
-                           _norms.get('rate_trend_max', rate_trend)) if 'rate_trend_min' in _norms else 0.5
-        else:
-            all_weighted_trends = []
-            all_rate_trends = []
-            for s_school in all_data['school'].unique():
-                s_grp = all_data[all_data['school'] == s_school].sort_values('academic_year')
-                s_ev = s_grp[['academic_year', 'total_undergrad']].dropna()
-                if len(s_ev) >= 3:
-                    s_sl, _, _, s_p, _ = _stats.linregress(
-                        s_ev['academic_year'].values,
-                        np.log(s_ev['total_undergrad'].values))
-                    s_et = (np.exp(s_sl) - 1) * 100
-                    s_cw = 1.0 if s_p < 0.05 else (0.5 if s_p < 0.15 else 0.25)
-                    all_weighted_trends.append(s_et * s_cw)
-                s_rv = s_grp[['academic_year', 'pct_ug_off_campus']].dropna()
-                if len(s_rv) >= 3 and s_rv['pct_ug_off_campus'].std() > 0.005:
-                    s_rsl, _, _, _, _ = _stats.linregress(
-                        s_rv['academic_year'].values,
-                        s_rv['pct_ug_off_campus'].values)
-                    all_rate_trends.append(s_rsl * 100)
-            n_enroll = norm_custom(weighted_trend, all_weighted_trends) if all_weighted_trends else 0.5
-            n_rate   = norm_custom(rate_trend, all_rate_trends) if all_rate_trends else 0.5
+        # Collect panel-wide weighted trends for normalization
+        all_weighted_trends = []
+        all_rate_trends = []
+        for s_school in all_data['school'].unique():
+            s_grp = all_data[all_data['school'] == s_school].sort_values('academic_year')
+            s_ev = s_grp[['academic_year', 'total_undergrad']].dropna()
+            if len(s_ev) >= 3:
+                s_sl, _, _, s_p, _ = _stats.linregress(
+                    s_ev['academic_year'].values,
+                    np.log(s_ev['total_undergrad'].values)
+                )
+                s_et = (np.exp(s_sl) - 1) * 100
+                s_cw = 1.0 if s_p < 0.05 else (0.5 if s_p < 0.15 else 0.25)
+                all_weighted_trends.append(s_et * s_cw)
+            s_rv = s_grp[['academic_year', 'pct_ug_off_campus']].dropna()
+            if len(s_rv) >= 3 and s_rv['pct_ug_off_campus'].std() > 0.005:
+                s_rsl, _, _, _, _ = _stats.linregress(
+                    s_rv['academic_year'].values,
+                    s_rv['pct_ug_off_campus'].values
+                )
+                all_rate_trends.append(s_rsl * 100)
+
+        n_enroll = norm_custom(weighted_trend, all_weighted_trends) if all_weighted_trends else 0.5
+        n_rate   = norm_custom(rate_trend, all_rate_trends) if all_rate_trends else 0.5
 
         growth_score = 0.70 * (n_enroll or 0.5) + 0.30 * (n_rate or 0.5)
 
@@ -754,28 +527,20 @@ def run_full_analysis(raw_panel, zillow_data=None, ch_data=None):
     reg3        = regressions.get('reg3')
     total_obs   = len(panel)
 
-    # Pre-compute normalization values once — avoids O(n²) recomputation per school
-    _norms = _precompute_panel_norms(panel, ch_data=ch_data, zillow_data=zillow_data)
-
     school_results = {}
     for school, grp in panel.groupby('school'):
         grp      = grp.sort_values('academic_year')
         forecast = forecast_school(grp, reg3, total_obs=total_obs)
-        score    = compute_investment_score(grp, panel, zillow_data=zillow_data, ch_data=ch_data, _norms=_norms)
+        score    = compute_investment_score(grp, panel, zillow_data=zillow_data, ch_data=ch_data)
         signal, color = score_to_signal(score)
         trends   = estimate_school_trends(grp)
 
         def lv(col):
             return _last_valid(grp[col]) if col in grp.columns else None
 
-        forecast_ci  = compute_forecast_ci(grp)
-        score_ci     = compute_score_ci(grp, panel, zillow_data=zillow_data, ch_data=ch_data, _norms=_norms)
-
         school_results[school] = {
             'panel':             grp,
             'forecast':          forecast,
-            'forecast_ci':       forecast_ci,
-            'score_ci':          score_ci,
             'trends':            trends,
             'investment_score':  round(score, 3),
             'signal':            signal,

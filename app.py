@@ -323,16 +323,7 @@ def fmt(val,style='number',prefix=''):
         return f'{prefix}{val:,.0f}'
     except: return str(val)
 
-def signal_html(signal,score,color,score_ci=None):
-    ci_html = ''
-    if score_ci and score_ci.get('width',0) > 0:
-        lo = score_ci['lo']; hi = score_ci['hi']
-        ci_html = (
-            f'<div style="margin-top:6px;font-size:10px;color:#4A4035;'
-            f'font-family:Manrope,sans-serif;letter-spacing:.06em;">'
-            f'90% CI &nbsp;<span style="color:{color};">{lo:.3f} – {hi:.3f}</span>'
-            f'</div>'
-        )
+def signal_html(signal,score,color):
     return f"""
     <div style="text-align:right">
         <div style="font-size:8px;font-weight:700;letter-spacing:.25em;text-transform:uppercase;
@@ -347,7 +338,6 @@ def signal_html(signal,score,color,score_ci=None):
             SCORE &nbsp;<span style="color:{color};font-weight:600;">{score:.3f}</span>
             <span style="color:#2A2018;"> / 1.000</span>
         </div>
-        {ci_html}
     </div>"""
 
 def vif_badge(v):
@@ -637,7 +627,7 @@ if page == 'School Dashboard':
         )
         st.markdown(header_html, unsafe_allow_html=True)
     with h2:
-        st.markdown(signal_html(sig,sco,scol,sr.get('score_ci')),unsafe_allow_html=True)
+        st.markdown(signal_html(sig,sco,scol),unsafe_allow_html=True)
 
     # Narrative Intelligence Panels
     def gen_thesis(sr, z, ch):
@@ -695,79 +685,32 @@ if page == 'School Dashboard':
     with left:
         st.markdown('<div class="sh">5-Year Demand Forecast</div>',unsafe_allow_html=True)
         if fc:
-            fci  = sr.get('forecast_ci', {})
-            tier = fci.get('tier', 'MEDIUM')
-            tier_color = C['GREEN'] if tier=='HIGH' else (C['AMBER'] if tier=='MEDIUM' else C['RED'])
-            tier_label = {
-                'HIGH':   'High confidence — enrollment trend is statistically strong',
-                'MEDIUM': 'Medium confidence — trend exists but based on limited data',
-                'LOW':    'Low confidence — trend not statistically reliable',
-            }.get(tier, '')
-
-            st.markdown(
-                f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
-                f'<span style="font-size:10px;font-weight:700;letter-spacing:.1em;'
-                f'text-transform:uppercase;color:{tier_color};">{tier} CONFIDENCE</span>'
-                f'<span style="font-size:11px;color:{C["MUTED"]};">{tier_label}</span>'
-                f'</div>',
-                unsafe_allow_html=True)
-
             obs_x = list(sp['academic_year'])
             obs_y = [float(v) if v is not None else None for v in sp['off_campus_demand']]
             fc_x  = [f['year'] for f in fc]
             fc_y  = [f['pred_demand'] for f in fc]
-
-            # Use statistically grounded CI from forecast_ci if available
-            year_cis = fci.get('year_cis', {})
-            if year_cis:
-                fc_lo = [year_cis.get(i+1, {}).get('lo', f['ci_lower']) for i,f in enumerate(fc)]
-                fc_hi = [year_cis.get(i+1, {}).get('hi', f['ci_upper']) for i,f in enumerate(fc)]
-            else:
-                fc_lo = [f['ci_lower'] for f in fc]
-                fc_hi = [f['ci_upper'] for f in fc]
-
+            fc_lo = [f['ci_lower'] for f in fc]
+            fc_hi = [f['ci_upper'] for f in fc]
             fig = base_fig(300)
-            fig.add_trace(go.Scatter(
-                x=fc_x+fc_x[::-1], y=fc_hi+fc_lo[::-1], fill='toself',
-                fillcolor='rgba(200,170,125,0.10)', line=dict(color='rgba(0,0,0,0)'),
-                name='90% CI', hoverinfo='skip'))
-            fig.add_trace(go.Scatter(
-                x=obs_x, y=obs_y, mode='lines+markers', name='Observed',
-                line=dict(color=C['GREEN'],width=2.5), marker=dict(size=7,color=C['GREEN'])))
-            fig.add_trace(go.Scatter(
-                x=[obs_x[-1]]+fc_x, y=[obs_y[-1]]+fc_y,
-                mode='lines+markers', name='Forecast',
-                line=dict(color=C['GOLD'],width=2.5,dash='dash'),
-                marker=dict(size=7,color=C['GOLD'])))
+            fig.add_trace(go.Scatter(x=fc_x+fc_x[::-1],y=fc_hi+fc_lo[::-1],fill='toself',
+                fillcolor='rgba(37,99,235,0.12)',line=dict(color='rgba(0,0,0,0)'),name='95% CI'))
+            fig.add_trace(go.Scatter(x=obs_x,y=obs_y,mode='lines+markers',name='Observed',
+                line=dict(color=C['GREEN'],width=2.5),marker=dict(size=7,color=C['GREEN'])))
+            fig.add_trace(go.Scatter(x=[obs_x[-1]]+fc_x,y=[obs_y[-1]]+fc_y,
+                mode='lines+markers',name='Forecast',
+                line=dict(color=C['BLUE'],width=2.5,dash='dash'),marker=dict(size=7,color=C['BLUE'])))
             xd,yd = ax(ytitle='Beds')
             fig.update_layout(xaxis=xd,yaxis=yd)
             st.plotly_chart(fig,use_container_width=True)
-
-            # Summary table using the CI
-            fc_rows = []
-            for i,f in enumerate(fc):
-                yr_ci = year_cis.get(i+1, {})
-                fc_rows.append({
-                    'Year':           f['year'],
-                    'Forecast':       f'{f["pred_demand"]:,}',
-                    'Low Estimate':   f'{yr_ci.get("lo", f["ci_lower"]):,}',
-                    'High Estimate':  f'{yr_ci.get("hi", f["ci_upper"]):,}',
-                    'Enrollment':     f'{f["est_enrollment"]:,}',
-                    'Off-Campus Rate':f'{f["off_campus_rate"]:.1%}',
-                })
-            st.dataframe(pd.DataFrame(fc_rows), use_container_width=True, hide_index=True)
-
-            # CI footnote
-            if fci:
-                p_s  = f"p={fci['p_enroll']:.3f}" if fci.get('p_enroll') else ''
-                rs_s = f"rate std={fci['rate_std']:.3f}" if fci.get('rate_std') else ''
-                n_s  = f"{fci.get('n_years_data','?')} years of data"
-                et_s = f"enrollment trend {fci.get('enroll_trend_pct',0):+.1f}%/yr"
-                st.markdown(
-                    f'<div style="font-size:10px;color:{C["DIM"]};margin-top:4px;">'
-                    f'90% CI based on enrollment trend SE and rate variability. '
-                    f'{et_s} · {p_s} · {rs_s} · {n_s}</div>',
-                    unsafe_allow_html=True)
+            fc_df = pd.DataFrame(fc)[['year','pred_demand','ci_lower','ci_upper','est_enrollment','pct_oos','off_campus_rate']]
+            fc_df.columns=['Year','Forecast','CI Low','CI High','Enrollment','OOS%','Off-Campus Rate']
+            fc_df['OOS%']           = fc_df['OOS%'].map(lambda x: f'{x:.1%}')
+            fc_df['Off-Campus Rate']= fc_df['Off-Campus Rate'].map(lambda x: f'{x:.1%}')
+            fc_df['Forecast']       = fc_df['Forecast'].map(lambda x: f'{x:,}')
+            fc_df['CI Low']         = fc_df['CI Low'].map(lambda x: f'{x:,}')
+            fc_df['CI High']        = fc_df['CI High'].map(lambda x: f'{x:,}')
+            fc_df['Enrollment']     = fc_df['Enrollment'].map(lambda x: f'{x:,}')
+            st.dataframe(fc_df,use_container_width=True,hide_index=True)
         else:
             st.info('Need 3+ years of data to generate forecast.')
 
@@ -1137,10 +1080,7 @@ elif page == 'Market Rankings':
     </div>''',unsafe_allow_html=True)
     rows = []
     for sch,sr in all_school_results.items():
-        sci  = sr.get('score_ci', {})
-        ci_s = (f"{sci['lo']:.3f}–{sci['hi']:.3f}" if sci and sci.get('width',0)>0 else '—')
         rows.append({'School':sch,'Signal':sr['signal'],'Score':sr['investment_score'],
-            'Score 90% CI':ci_s,
             'Off-Campus Rate':sr['pct_ug_off_campus'],'Off-Campus Demand':sr['off_campus_demand'],
             'Retention':sr['retention_rate'],'OOS Share':sr['pct_oos_ug'],
             'Tuition':sr['tuition_instate'],

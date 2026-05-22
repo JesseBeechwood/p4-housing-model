@@ -160,6 +160,22 @@ div[data-testid="stMetric"] div[data-testid="stMetricValue"]{
     color:#9A9080;
     line-height:1.7;
 }
+.thesis-value{
+    font-size:22px;
+    font-weight:600;
+    color:#F5F1EA;
+    font-family:'Manrope',sans-serif;
+    margin-bottom:4px;
+    letter-spacing:-.01em;
+    line-height:1.2;
+}
+.thesis-note{
+    font-size:10px;
+    color:#4A4035;
+    font-family:'Inter',sans-serif;
+    line-height:1.4;
+    margin-top:4px;
+}
 
 /* ── Number Display ──────────────────────────────────────────────── */
 .kpi-giant{
@@ -637,45 +653,53 @@ if page == 'School Dashboard':
     with h2:
         st.markdown(signal_html(sig,sco,scol),unsafe_allow_html=True)
 
-    # Narrative Intelligence Panels
-    def gen_thesis(sr, z, ch):
-        sig = sr.get('signal','')
-        oos = sr.get('pct_oos_ug',0) or 0
-        ret = sr.get('retention_rate',0) or 0
-        bts = ch.get('bed_to_student_ratio') if ch else None
-        rent_mom = z.get('momentum_label','') if z else ''
-        trend = (z.get('rent_trend_pct',0) or 0) if z else 0
-        parts = []
-        if oos > 0.50: parts.append(f"Elevated OOS enrollment ({oos:.0%}) sustains structural off-campus demand with near-certain multi-year renters.")
-        elif oos > 0.25: parts.append(f"Meaningful OOS share ({oos:.0%}) supports durable renter demand across the enrollment cycle.")
-        if ret > 0.93: parts.append(f"Retention at {ret:.0%} ensures strong cohort continuity — current renters return at a premium rate.")
-        if bts and bts < 0.80: parts.append("Purpose-built supply materially trails demand — market is structurally undersupplied.")
-        if 'Strengthening' in rent_mom: parts.append("Rent momentum re-accelerating — leading indicator of near-term rental growth.")
-        elif trend > 3: parts.append(f"Long-run rent trend of {trend:.1f}%/yr supports compounding NOI growth assumptions.")
-        thesis = ' '.join(parts) if parts else "Demand fundamentals under evaluation. Additional CDS data will sharpen this assessment."
-        risks = []
-        if bts and bts > 1.1: risks.append(f"Purpose-built supply exceeds renter demand (ratio {bts:.2f}) — absorption risk present.")
-        if ch and ch.get('beds_under_construction',0) > 0:
-            uc = ch.get('beds_under_construction',0)
-            risks.append(f"{uc:,} beds under construction create near-term supply pressure on occupancy and rents.")
-        if 'Cooling' in rent_mom: risks.append("Rent demand momentum decelerating — monitor before committing capital.")
-        risk = risks[0] if risks else "No material supply-side risks identified with current data coverage."
-        if sig in ['STRONG BUY','BUY'] and (not bts or bts < 1.0):
-            outlook = "Favorable near-term entry. Demand-supply dynamics support stabilized occupancy above 93%. Long-term pricing power intact."
-        elif sig == 'HOLD':
-            outlook = "Market requires monitoring. Near-term oversupply creates cap rate compression risk. Re-evaluate at next lease cycle."
-        else:
-            outlook = "Proceed with caution. Additional data collection required before investment committee presentation."
-        return thesis, risk, outlook
 
     z_sel  = zillow_data.get(selected) if zillow_data else None
     ch_sel = ch_data.get(selected) if ch_data else None
-    thesis_txt, risk_txt, outlook_txt = gen_thesis(sr, z_sel, ch_sel)
+
+    # ── Market Facts Strip (6 factual stats — no interpretation) ──────────
+    def _fmt_stat(label, value, note=''):
+        note_html = f'<div class="thesis-note">{note}</div>' if note else ''
+        return (f'<div class="thesis">'
+                f'<div class="thesis-label">{label}</div>'
+                f'<div class="thesis-value">{value}</div>'
+                f'{note_html}'
+                f'</div>')
+
+    _ch = ch_sel or {}
+    _z  = z_sel  or {}
+
+    _demand   = sr.get('off_campus_demand')
+    _bts      = _ch.get('bed_to_student_ratio')
+    _occ      = _ch.get('occupancy_rate')
+    _pipe     = _ch.get('pipeline_pct', 0) or 0
+    _rent_bed = _ch.get('avg_rent_per_bed')
+    _rent_trn = _z.get('rent_trend_pct')
+    _pb_beds  = _ch.get('purpose_built_beds')
+
+    stat1 = _fmt_stat('Off-Campus Demand',
+        f"{int(_demand):,} beds" if _demand else '—',
+        f"{sr.get('pct_ug_off_campus',0):.0%} of undergrads live off campus" if sr.get('pct_ug_off_campus') else '')
+    stat2 = _fmt_stat('Purpose-Built Supply',
+        f"{int(_pb_beds):,} beds" if _pb_beds else '—',
+        f"Bed-to-student ratio: {_bts:.2f}" if _bts else '')
+    stat3 = _fmt_stat('Occupancy Rate',
+        f"{_occ:.1%}" if _occ else '—',
+        'Current purpose-built occupancy')
+    stat4 = _fmt_stat('New Supply Pipeline',
+        f"{_pipe:.1%}" if _pipe else '0.0%',
+        'Beds under construction as % of existing stock')
+    stat5 = _fmt_stat('Avg Rent / Bed',
+        f"${_rent_bed:,.0f}/mo" if _rent_bed else '—',
+        'Purpose-built asking rent')
+    stat6 = _fmt_stat('Rent Growth Trend',
+        f"{_rent_trn:+.1f}%/yr" if _rent_trn is not None else '—',
+        'Zillow metro annual avg since 2015')
+
     thesis_html = (
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;margin:24px 0;background:rgba(200,170,125,0.07);">'
-        + '<div class="thesis"><div class="thesis-label">Investment Thesis</div><div class="thesis-text">' + thesis_txt + '</div></div>'
-        + '<div class="thesis"><div class="thesis-label" style="color:#A0584A;">Key Risk</div><div class="thesis-text">' + risk_txt + '</div></div>'
-        + '<div class="thesis"><div class="thesis-label" style="color:#5D8A88;">Market Outlook</div><div class="thesis-text">' + outlook_txt + '</div></div>'
+        '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1px;'
+        'margin:24px 0;background:rgba(200,170,125,0.07);">'
+        + stat1 + stat2 + stat3 + stat4 + stat5 + stat6
         + '</div>'
     )
     st.markdown(thesis_html, unsafe_allow_html=True)

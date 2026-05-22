@@ -237,6 +237,138 @@ def run_regressions(panel):
     return results
 
 
+
+def compute_forecast_ci(school_data, n_years=5):
+    """
+    Statistically grounded confidence intervals on the 5-year demand forecast.
+
+    Uncertainty comes from two sources:
+      1. Enrollment trend: uses the standard error of the regression slope
+         to build a 90% CI on future enrollment via t-distribution.
+      2. Off-campus rate: uses the historical standard deviation of the rate
+         to build a 90% CI assuming the rate stays within its observed range.
+
+    Returns dict with per-year (lo, mid, hi) and a confidence tier:
+      HIGH   — p<0.05 enrollment trend, rate std<0.02, n>=4 years
+      MEDIUM — p<0.15 enrollment trend OR rate std<0.04
+      LOW    — trend not statistically reliable or <3 years of data
+    """
+    from scipy import stats as _stats
+
+    grp = school_data.sort_values('academic_year').copy()
+    ev  = grp[['academic_year', 'total_undergrad']].dropna()
+    rv  = grp['pct_ug_off_campus'].dropna()
+
+    rate_now = float(rv.iloc[-1]) if len(rv) else 0.05
+    rate_std = float(rv.std())    if len(rv) >= 2 else 0.02
+
+    enrl_now = float(ev['total_undergrad'].iloc[-1]) if len(ev) else 0.0
+    slope = intercept = se = 0.0
+    p_enroll = 1.0
+
+    if len(ev) >= 3:
+        slope, intercept, r_val, p_enroll, se = _stats.linregress(
+            ev['academic_year'].values,
+            np.log(ev['total_undergrad'].values)
+        )
+
+    # 90% CI on slope (t-distribution, df = n-2)
+    n_obs = len(ev)
+    t_crit = _stats.t.ppf(0.95, df=max(n_obs - 2, 1))  # one-sided 95% = two-sided 90%
+    slope_lo = slope - t_crit * se
+    slope_hi = slope + t_crit * se
+
+    # Rate 90% CI — clip to valid range
+    rate_lo = max(0.01, rate_now - 1.645 * rate_std)
+    rate_hi = min(0.98, rate_now + 1.645 * rate_std)
+
+    # Confidence tier
+    if p_enroll < 0.05 and rate_std < 0.02 and n_obs >= 4:
+        tier = 'HIGH'
+    elif p_enroll < 0.15 and n_obs >= 3:
+        tier = 'MEDIUM'
+    else:
+        tier = 'LOW'
+
+    year_cis = {}
+    for yr in range(1, n_years + 1):
+        enrl_mid = enrl_now * np.exp(slope    * yr)
+        enrl_lo  = enrl_now * np.exp(slope_lo * yr)
+        enrl_hi  = enrl_now * np.exp(slope_hi * yr)
+
+        demand_mid = enrl_mid * rate_now
+        demand_lo  = max(0, enrl_lo * rate_lo)
+        demand_hi  = enrl_hi * rate_hi
+
+        year_cis[yr] = {
+            'lo':  int(demand_lo),
+            'mid': int(demand_mid),
+            'hi':  int(demand_hi),
+        }
+
+    return {
+        'year_cis':    year_cis,
+        'tier':        tier,
+        'p_enroll':    round(p_enroll, 4),
+        'enroll_se':   round(se, 5),
+        'rate_std':    round(rate_std, 4),
+        'n_years_data': n_obs,
+        'enroll_trend_pct': round((np.exp(slope) - 1) * 100, 2),
+    }
+
+
+def compute_score_ci(school_data, panel, zillow_data=None, ch_data=None, n_boot=400):
+    """
+    Bootstrap confidence interval on the investment score.
+
+    Perturbs each CDS input (off-campus rate, OOS share, retention) by adding
+    random noise drawn from that variable's own historical standard deviation.
+    Recomputes the investment score 400 times and takes the 5th/95th percentile
+    as a 90% CI.
+
+    Width of the CI directly reflects data quality:
+    - Stable inputs across years -> narrow CI (high confidence)
+    - Volatile inputs -> wide CI (lower confidence)
+    """
+    grp = school_data.sort_values('academic_year').copy()
+    central = compute_investment_score(grp, panel, zillow_data=zillow_data, ch_data=ch_data)
+
+    off_std = float(grp['pct_ug_off_campus'].std()) if grp['pct_ug_off_campus'].notna().sum() >= 2 else 0.01
+    oos_std = float(grp['pct_oos_ug'].std())        if grp['pct_oos_ug'].notna().sum() >= 2        else 0.01
+    ret_std = float(grp['retention_rate'].std())    if grp['retention_rate'].notna().sum() >= 2    else 0.005
+
+    scores = []
+    rng = np.random.default_rng(42)
+    n   = len(grp)
+
+    for _ in range(n_boot):
+        g2 = grp.copy()
+        g2['pct_ug_off_campus'] = np.clip(
+            grp['pct_ug_off_campus'] + rng.normal(0, off_std, n), 0.01, 0.99)
+        g2['pct_oos_ug'] = np.clip(
+            grp['pct_oos_ug'] + rng.normal(0, oos_std, n), 0.0, 1.0)
+        g2['retention_rate'] = np.clip(
+            grp['retention_rate'] + rng.normal(0, ret_std, n), 0.5, 1.0)
+        g2['pct_ug_on_campus']  = 1.0 - g2['pct_ug_off_campus']
+        g2['off_campus_demand'] = g2['total_undergrad'] * g2['pct_ug_off_campus']
+        try:
+            scores.append(compute_investment_score(
+                g2, panel, zillow_data=zillow_data, ch_data=ch_data))
+        except:
+            pass
+
+    if not scores:
+        return {'lo': central, 'hi': central, 'central': central, 'width': 0.0}
+
+    lo = float(np.percentile(scores, 5))
+    hi = float(np.percentile(scores, 95))
+    return {
+        'lo':      round(lo, 3),
+        'hi':      round(hi, 3),
+        'central': round(central, 3),
+        'width':   round(hi - lo, 3),
+    }
+
 def forecast_school(school_data, reg3, n_years=FORECAST_YEARS, total_obs=10):
     """
     5-year forecast using ONLY school-specific historical trends.
@@ -538,9 +670,14 @@ def run_full_analysis(raw_panel, zillow_data=None, ch_data=None):
         def lv(col):
             return _last_valid(grp[col]) if col in grp.columns else None
 
+        forecast_ci  = compute_forecast_ci(grp)
+        score_ci     = compute_score_ci(grp, panel, zillow_data=zillow_data, ch_data=ch_data)
+
         school_results[school] = {
             'panel':             grp,
             'forecast':          forecast,
+            'forecast_ci':       forecast_ci,
+            'score_ci':          score_ci,
             'trends':            trends,
             'investment_score':  round(score, 3),
             'signal':            signal,

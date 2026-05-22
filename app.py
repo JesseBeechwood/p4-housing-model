@@ -248,6 +248,9 @@ hr{border:none;border-top:1px solid rgba(200,170,125,0.13)!important;margin:24px
 }
 .stSlider [data-baseweb="slider"] [data-testid="stTickBarMin"],
 .stSlider [data-baseweb="slider"] [data-testid="stTickBarMax"]{color:#5A5040!important;}
+.stSlider [data-baseweb="slider"] [role="slider"]{background:#C8AA7D!important;border-color:#C8AA7D!important;}
+.stSlider [data-baseweb="slider"] [data-testid="stSliderTrackFill"]{background:#C8AA7D!important;}
+.stSlider [data-baseweb="slider"] div[class*="Track"]{background:rgba(200,170,125,0.20)!important;}
 
 /* ── Scrollbar ──────────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:4px;height:4px;}
@@ -1554,82 +1557,439 @@ elif page == 'Sensitivity Explorer':
     <div class="bw-page-title">Scenario Analysis</div>
     <div class="bw-page-sub">Sensitivity Explorer</div>
     ''', unsafe_allow_html=True)
-    sr   = school_results[selected]
-    lr   = sr['panel'].iloc[-1]
-    b_ug   = float(lr.get('total_undergrad') or 30000)
-    b_oos  = float(lr.get('pct_oos_ug') or 0.22)
-    b_ret  = float(lr.get('retention_rate') or 0.92)
-    b_on   = float(lr.get('pct_ug_on_campus') or 0.38)
-    b_tran = float(lr.get('transfer_enrolled') or 2000)
-    b_tuit = float(lr.get('tuition_instate') or 10000)
 
-    sc_,out_ = st.columns([1,2])
-    with sc_:
-        st.markdown(f'<div style="color:{C["MUTED"]};font-size:12px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Adjust Inputs</div>',unsafe_allow_html=True)
-        e_d = st.slider('Enrollment growth (%)',-10,20,0)
-        o_d = st.slider('OOS share shift (pp)', -5,10,0)
-        r_d = st.slider('Retention shift (pp)', -5, 5,0)
-        n_d = st.slider('On-campus rate shift (pp)',-15,15,0)
-        t_d = st.slider('Transfer growth (%)',-20,30,0,5)
-        st.markdown('---')
-        st.markdown(f'<div style="color:{C["MUTED"]};font-size:12px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Rent Assumptions</div>',unsafe_allow_html=True)
-        rg_d = st.slider('Annual rent growth (%)', -5, 15, int(round((zillow_data.get(selected,{}).get('rent_trend_pct',3) or 3))), 1, help='Adjust projected annual rent growth rate for this market')
+    sr  = school_results[selected]
+    sp  = sr['panel'].sort_values('academic_year')
+    lr  = sp.iloc[-1]
 
-    new_ug   = b_ug*(1+e_d/100); new_oos=b_oos+o_d/100; new_ret=b_ret+r_d/100
-    new_on   = b_on+n_d/100;     new_off=1-new_on;       new_tran=b_tran*(1+t_d/100)
-    base_dem = int(b_ug*(1-b_on)); new_dem=int(new_ug*new_off)
-    delta    = new_dem-base_dem;  dpct=delta/base_dem*100 if base_dem else 0
-    dc       = C['GREEN'] if delta>=0 else C['RED']
+    # ── Baseline values ──────────────────────────────────────────────────
+    b_ug   = float(lr.get('total_undergrad')    or 30000)
+    b_oos  = float(lr.get('pct_oos_ug')         or 0.22)
+    b_ret  = float(lr.get('retention_rate')     or 0.92)
+    b_on   = float(lr.get('pct_ug_on_campus')   or 0.38)
+    b_off  = 1.0 - b_on
+    b_dem  = int(b_ug * b_off)
+    b_rent = float(zillow_data.get(selected, {}).get('latest_rent') or 1500)
 
-    reg3 = regressions.get('reg3'); model_dem=None
-    if reg3:
-        try:
-            cur_demand = float(lr.get('off_campus_demand') or base_dem)
-            Xn = reg3['scaler'].transform([[cur_demand*(1+e_d/100)*(1+o_d/100), new_ret, new_oos]])
-            model_dem = int(reg3['model'].predict(Xn)[0])
-        except: pass
+    # ── Session state: saved scenarios ───────────────────────────────────
+    if 'scenarios' not in st.session_state:
+        st.session_state.scenarios = {}
 
-    with out_:
-        # Rent projections
-        base_rent  = zillow_data.get(selected,{}).get('latest_rent') or 1500
-        proj_rent5 = base_rent * (1 + rg_d/100) ** 5
-        rent_delta = proj_rent5 - base_rent
-        rc = C['GREEN'] if rg_d >= 0 else C['RED']
+    # ── Mode toggle ───────────────────────────────────────────────────────
+    mode_col, _ = st.columns([2, 3])
+    with mode_col:
+        mode = st.radio('Mode', ['Scenario Builder', 'Reverse Mode'],
+                        horizontal=True, label_visibility='collapsed')
 
-        st.markdown(f"""<div class="card">
-            <div style="font-size:12px;color:{C['MUTED']};text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">Scenario — {selected}</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;">
-                <div><div style="font-size:11px;color:{C['MUTED']};">Baseline Demand</div>
-                     <div style="font-size:24px;font-weight:700;color:{C['TEXT']};">{base_dem:,}</div>
-                     <div style="font-size:11px;color:{C['MUTED']};">beds today</div></div>
-                <div><div style="font-size:11px;color:{C['MUTED']};">Scenario Demand</div>
-                     <div style="font-size:24px;font-weight:700;color:{dc};">{new_dem:,}</div>
-                     <div style="font-size:11px;color:{dc};">{'+' if delta>=0 else ''}{delta:,} ({dpct:+.1f}%)</div></div>
-                <div><div style="font-size:11px;color:{C['MUTED']};">Current Rent</div>
-                     <div style="font-size:24px;font-weight:700;color:{C['TEXT']};">${base_rent:,.0f}/mo</div>
-                     <div style="font-size:11px;color:{C['MUTED']};">Zillow ZORI today</div></div>
-                <div><div style="font-size:11px;color:{C['MUTED']};">Rent in 5 Years</div>
-                     <div style="font-size:24px;font-weight:700;color:{rc};">${proj_rent5:,.0f}/mo</div>
-                     <div style="font-size:11px;color:{rc};">+${rent_delta:,.0f} at {rg_d:+.0f}%/yr</div></div>
-            </div></div>""",unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="height:1px;background:{C["BORDER"]};margin:4px 0 20px;"></div>',
+        unsafe_allow_html=True)
 
-        fig_wf = go.Figure(go.Waterfall(orientation='v',
-            measure=['absolute','relative','relative','relative','relative','total'],
-            x=['Baseline','Enrollment','OOS','Retention','On-Campus','Scenario'],
-            y=[base_dem,int(b_ug*(e_d/100)*new_off),int(new_ug*(o_d/100)*0.3),
-               int(new_ug*new_off*(r_d/100)*0.5),int(new_ug*(-n_d/100)),0],
-            connector=dict(line=dict(color='rgba(200,170,125,0.09)')),
-            increasing=dict(marker=dict(color=C['GREEN'])),
-            decreasing=dict(marker=dict(color=C['RED'])),
-            totals=dict(marker=dict(color=C['BLUE']))))
-        fig_wf.update_layout(paper_bgcolor=C['CARD'],plot_bgcolor=C['CARD'],
-            font=dict(family='Segoe UI',color=C['TEXT'],size=12),height=300,
-            margin=dict(l=12,r=12,t=24,b=12),
-            xaxis=dict(gridcolor='rgba(200,170,125,0.09)',tickfont=dict(color=C['MUTED'])),
-            yaxis=dict(gridcolor='rgba(200,170,125,0.09)',tickfont=dict(color=C['MUTED']),
-                       title=dict(text='Beds',font=dict(color=C['MUTED']))))
-        st.plotly_chart(fig_wf,use_container_width=True)
+    # ════════════════════════════════════════════════════════════════════
+    # SCENARIO BUILDER MODE
+    # ════════════════════════════════════════════════════════════════════
+    if mode == 'Scenario Builder':
 
+        ctrl_col, results_col = st.columns([1, 2])
+
+        with ctrl_col:
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin-bottom:16px;">Adjust Inputs — {selected}</div>',
+                unsafe_allow_html=True)
+
+            e_d  = st.slider('Enrollment growth (%)',    -15, 25,  0, 1)
+            n_d  = st.slider('On-campus rate shift (pp)', -20, 20,  0, 1,
+                             help='Negative = more students move off campus')
+            o_d  = st.slider('OOS share shift (pp)',      -10, 15,  0, 1)
+            r_d  = st.slider('Retention shift (pp)',       -8,  8,  0, 1)
+            st.markdown(
+                f'<div style="height:1px;background:{C["BORDER"]};margin:12px 0;"></div>',
+                unsafe_allow_html=True)
+            default_rg = int(round(zillow_data.get(selected, {}).get('rent_trend_pct', 3) or 3))
+            rg_d = st.slider('Annual rent growth (%)', -5, 15, default_rg, 1)
+
+            st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+            sc_name = st.text_input('Scenario name', placeholder='e.g. Bull Case')
+            if st.button('Save Scenario', use_container_width=True):
+                if sc_name:
+                    st.session_state.scenarios[sc_name] = dict(
+                        e_d=e_d, n_d=n_d, o_d=o_d, r_d=r_d, rg_d=rg_d, school=selected)
+                    st.success(f'Saved "{sc_name}"')
+
+            if st.session_state.scenarios:
+                st.markdown(
+                    f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                    f'letter-spacing:.1em;margin:12px 0 8px;">Saved Scenarios</div>',
+                    unsafe_allow_html=True)
+                for sc_n, sc_v in list(st.session_state.scenarios.items()):
+                    sc_row1, sc_row2 = st.columns([3, 1])
+                    with sc_row1:
+                        st.markdown(
+                            f'<div style="color:{C["IVORY"]};font-size:12px;padding:4px 0;">'
+                            f'{sc_n}<span style="color:{C["MUTED"]};font-size:10px;"> '
+                            f'({sc_v.get("school","?")})</span></div>',
+                            unsafe_allow_html=True)
+                    with sc_row2:
+                        if st.button('X', key=f'del_{sc_n}'):
+                            del st.session_state.scenarios[sc_n]
+                            st.rerun()
+
+        # ── Compute scenario values ───────────────────────────────────────
+        new_ug  = b_ug  * (1 + e_d / 100)
+        new_on  = min(0.99, max(0.01, b_on  + n_d / 100))
+        new_off = 1.0 - new_on
+        new_oos = min(1.0,  max(0.0,  b_oos + o_d / 100))
+        new_ret = min(1.0,  max(0.5,  b_ret + r_d / 100))
+        new_dem = int(new_ug * new_off)
+        d_delta = new_dem - b_dem
+        d_color = C['GREEN'] if d_delta >= 0 else C['RED']
+
+        # 5-year demand trajectory
+        import numpy as _np
+        from scipy import stats as _stats
+        enroll_vals = sp[['academic_year', 'total_undergrad']].dropna()
+        if len(enroll_vals) >= 3:
+            _sl, _ic, _, _, _ = _stats.linregress(
+                enroll_vals['academic_year'].values,
+                _np.log(enroll_vals['total_undergrad'].values))
+            base_enroll_trend = (_np.exp(_sl) - 1) * 100
+        else:
+            base_enroll_trend = 0.0
+
+        years_fwd     = list(range(1, 6))
+        yr_labels     = [f'Yr {y}' for y in years_fwd]
+        base_traj     = [int(b_ug  * (1 + base_enroll_trend / 100) ** y * b_off)  for y in years_fwd]
+        sc_traj       = [int(new_ug * (1 + base_enroll_trend / 100) ** y * new_off) for y in years_fwd]
+        base_rent_trend = zillow_data.get(selected, {}).get('rent_trend_pct', 3) or 3
+        rent_traj_base  = [b_rent * (1 + base_rent_trend / 100) ** y for y in years_fwd]
+        rent_traj_sc    = [b_rent * (1 + rg_d / 100) ** y             for y in years_fwd]
+
+        with results_col:
+
+            # ── KPI hero row ──────────────────────────────────────────────
+            h1, h2, h3, h4 = st.columns(4)
+
+            def _kpi(col, label, base_val, sc_val, fmt_fn, invert=False):
+                delta  = sc_val - base_val
+                is_pos = (delta >= 0) if not invert else (delta <= 0)
+                dc     = C['GREEN'] if (delta != 0 and is_pos) else (C['RED'] if delta != 0 else C['MUTED'])
+                sign   = '+' if delta > 0 else ''
+                col.markdown(
+                    f'<div class="card" style="padding:14px 16px;">'
+                    f'<div style="font-size:10px;color:{C["MUTED"]};text-transform:uppercase;'
+                    f'letter-spacing:.08em;margin-bottom:6px;">{label}</div>'
+                    f'<div style="font-size:11px;color:{C["MUTED"]};margin-bottom:2px;">Baseline</div>'
+                    f'<div style="font-size:20px;font-weight:600;color:{C["TEXT"]};">{fmt_fn(base_val)}</div>'
+                    f'<div style="font-size:11px;color:{C["MUTED"]};margin-top:8px;margin-bottom:2px;">Scenario</div>'
+                    f'<div style="font-size:20px;font-weight:600;color:{dc};">{fmt_fn(sc_val)}</div>'
+                    f'<div style="font-size:11px;color:{dc};margin-top:4px;">{sign}{fmt_fn(delta)}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True)
+
+            _kpi(h1, 'Off-Campus Demand', b_dem,  new_dem,  lambda x: f'{int(x):,}')
+            _kpi(h2, 'Enrollment',        b_ug,   new_ug,   lambda x: f'{int(x):,}')
+            _kpi(h3, 'Off-Campus Rate',   b_off,  new_off,  lambda x: f'{x:.1%}', invert=True)
+            rent5_base = b_rent * (1 + base_rent_trend / 100) ** 5
+            rent5_sc   = b_rent * (1 + rg_d / 100) ** 5
+            _kpi(h4, 'Rent (5yr)', rent5_base, rent5_sc, lambda x: f'${x:,.0f}')
+
+            st.markdown('<div style="height:16px;"></div>', unsafe_allow_html=True)
+
+            # ── 5-year demand trajectory ──────────────────────────────────
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin-bottom:10px;">5-Year Demand Trajectory</div>',
+                unsafe_allow_html=True)
+
+            fig_traj = base_fig(220, legend=True, hovermode='x unified')
+            fig_traj.add_scatter(
+                x=yr_labels, y=base_traj, name='Baseline',
+                line=dict(color=C['MUTED'], dash='dash', width=2),
+                mode='lines+markers', marker=dict(color=C['MUTED'], size=5))
+            fig_traj.add_scatter(
+                x=yr_labels, y=sc_traj, name='Scenario',
+                line=dict(color=C['GOLD'], width=2),
+                mode='lines+markers', marker=dict(color=C['GOLD'], size=6),
+                fill='tonexty', fillcolor='rgba(200,170,125,0.07)')
+            xd, yd = ax(ytitle='Beds')
+            fig_traj.update_layout(xaxis=xd, yaxis=yd)
+            st.plotly_chart(fig_traj, use_container_width=True)
+
+            # ── Per-input impact cards ────────────────────────────────────
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin:4px 0 12px;">Input Impact on Demand</div>',
+                unsafe_allow_html=True)
+
+            inputs = [
+                ('Enrollment',      e_d, int(b_ug * (1 + e_d / 100) * b_off) - b_dem,  '%'),
+                ('On-Campus Rate',  n_d, int(b_ug * (1 - min(0.99, max(0.01, b_on + n_d / 100)))) - b_dem, 'pp'),
+                ('OOS Share',       o_d, int(b_ug * b_off * (1 + o_d * 0.02)) - b_dem,  'pp'),
+                ('Retention',       r_d, int(b_ug * b_off * (1 + r_d * 0.005)) - b_dem, 'pp'),
+            ]
+            ic1, ic2 = st.columns(2)
+            for idx, (inp_name, slider_val, impact, unit) in enumerate(inputs):
+                col = ic1 if idx % 2 == 0 else ic2
+                impact_pct = impact / b_dem * 100 if b_dem else 0
+                bar_w      = min(abs(impact_pct) / 20 * 100, 100)
+                bar_col    = C['GREEN'] if impact >= 0 else C['RED']
+                neutral    = slider_val == 0
+                disp_col   = C['MUTED'] if neutral else bar_col
+                sign_s     = '+' if slider_val > 0 else ''
+                sign_i     = '+' if impact > 0 else ''
+                col.markdown(
+                    f'<div class="card" style="padding:12px 14px;margin-bottom:8px;">'
+                    f'<div style="display:flex;justify-content:space-between;'
+                    f'align-items:baseline;margin-bottom:8px;">'
+                    f'<div style="font-size:11px;color:{C["MUTED"]};text-transform:uppercase;'
+                    f'letter-spacing:.08em;">{inp_name}</div>'
+                    f'<div style="font-size:12px;font-weight:600;color:{disp_col};">'
+                    f'{sign_s}{slider_val}{unit}</div></div>'
+                    f'<div style="font-size:18px;font-weight:600;color:{disp_col};">'
+                    f'{sign_i}{impact:,} beds</div>'
+                    f'<div style="margin-top:8px;height:4px;background:{C["BORDER"]};border-radius:2px;">'
+                    f'<div style="width:{bar_w}%;height:4px;background:{disp_col};'
+                    f'border-radius:2px;"></div></div>'
+                    f'<div style="font-size:10px;color:{disp_col};margin-top:4px;">'
+                    f'{sign_i}{impact_pct:.1f}% demand change</div>'
+                    f'</div>',
+                    unsafe_allow_html=True)
+
+            # ── Rent trajectory ───────────────────────────────────────────
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin:12px 0 10px;">Rent Trajectory ($/mo)</div>',
+                unsafe_allow_html=True)
+            fig_rent = base_fig(200, legend=True, hovermode='x unified')
+            fig_rent.add_scatter(
+                x=yr_labels, y=rent_traj_base, name='Market Baseline',
+                line=dict(color=C['MUTED'], dash='dash', width=2),
+                mode='lines+markers', marker=dict(color=C['MUTED'], size=5))
+            fig_rent.add_scatter(
+                x=yr_labels, y=rent_traj_sc, name='Scenario',
+                line=dict(color=C['TEAL'], width=2),
+                mode='lines+markers', marker=dict(color=C['TEAL'], size=6))
+            xd2, yd2 = ax(ytitle='$/mo', yfmt='$,.0f')
+            fig_rent.update_layout(xaxis=xd2, yaxis=yd2)
+            st.plotly_chart(fig_rent, use_container_width=True)
+
+            # ── Saved scenario comparison ─────────────────────────────────
+            same_school = {k: v for k, v in st.session_state.scenarios.items()
+                           if v.get('school') == selected}
+            if same_school:
+                st.markdown(
+                    f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                    f'letter-spacing:.1em;margin:12px 0 10px;">Scenario Comparison</div>',
+                    unsafe_allow_html=True)
+                fig_comp = base_fig(220, legend=True, hovermode='x unified')
+                fig_comp.add_scatter(
+                    x=yr_labels, y=base_traj, name='Baseline',
+                    line=dict(color=C['MUTED'], dash='dash', width=1),
+                    mode='lines+markers', marker=dict(size=4))
+                comp_colors = [C['GOLD'], C['GREEN'], C['TEAL'], C['PURPLE'], C['ORANGE']]
+                for ci, (sc_n, sc_v) in enumerate(same_school.items()):
+                    _e       = sc_v.get('e_d', 0)
+                    _n       = sc_v.get('n_d', 0)
+                    _new_ug  = b_ug  * (1 + _e / 100)
+                    _new_off = 1.0 - min(0.99, max(0.01, b_on + _n / 100))
+                    _traj    = [int(_new_ug * (1 + base_enroll_trend / 100) ** y * _new_off)
+                                for y in years_fwd]
+                    fig_comp.add_scatter(
+                        x=yr_labels, y=_traj, name=sc_n,
+                        line=dict(color=comp_colors[ci % len(comp_colors)], width=2),
+                        mode='lines+markers',
+                        marker=dict(color=comp_colors[ci % len(comp_colors)], size=5))
+                xd3, yd3 = ax(ytitle='Beds')
+                fig_comp.update_layout(xaxis=xd3, yaxis=yd3)
+                st.plotly_chart(fig_comp, use_container_width=True)
+
+    # ════════════════════════════════════════════════════════════════════
+    # REVERSE MODE
+    # ════════════════════════════════════════════════════════════════════
+    else:
+        st.markdown(
+            f'<div class="card" style="padding:14px 16px;margin-bottom:20px;">'
+            f'<div style="font-size:12px;color:{C["MUTED"]};margin-bottom:6px;">'
+            f'Set a demand target and see what combination of inputs gets you there. '
+            f'Useful for underwriting a minimum viable market size.</div>'
+            f'<div style="font-size:11px;color:{C["DIM"]};">Baseline demand for '
+            f'<strong style="color:{C["IVORY"]};">{selected}</strong>: '
+            f'<strong style="color:{C["GOLD"]};">{b_dem:,} beds</strong></div>'
+            f'</div>',
+            unsafe_allow_html=True)
+
+        rev_col1, rev_col2 = st.columns([1, 2])
+
+        with rev_col1:
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin-bottom:16px;">Target</div>',
+                unsafe_allow_html=True)
+
+            target_dem = st.number_input(
+                'Target off-campus demand (beds)',
+                min_value=int(b_dem * 0.5),
+                max_value=int(b_dem * 3.0),
+                value=int(b_dem * 1.20),
+                step=500,
+                help='The minimum demand you need for a deal to underwrite')
+
+            req_pct = (target_dem - b_dem) / b_dem * 100 if b_dem else 0
+            t_color = C['GREEN'] if target_dem > b_dem else C['AMBER']
+            sign_t  = '+' if req_pct >= 0 else ''
+            st.markdown(
+                f'<div style="margin:12px 0 20px;">'
+                f'<div style="font-size:11px;color:{C["MUTED"]};">Requires</div>'
+                f'<div style="font-size:24px;font-weight:600;color:{t_color};">{sign_t}{req_pct:.1f}%</div>'
+                f'<div style="font-size:11px;color:{C["MUTED"]};">demand growth from baseline</div>'
+                f'</div>',
+                unsafe_allow_html=True)
+
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin-bottom:12px;">Lever Limits</div>',
+                unsafe_allow_html=True)
+            max_enroll = st.slider('Max enrollment growth (%)', 0, 25, 10, 1)
+            max_off    = st.slider('Max on-campus rate shift (pp)', -20, 0, -10, 1,
+                                   help='Negative = more students off-campus')
+            max_oos    = st.slider('Max OOS share shift (pp)', 0, 15, 5, 1)
+
+        with rev_col2:
+            gap = target_dem - b_dem
+
+            enroll_dem_max  = int(b_ug * (1 + max_enroll / 100) * b_off)
+            enroll_contrib  = enroll_dem_max - b_dem
+            enroll_gap_pct  = enroll_contrib / gap * 100 if gap else 0
+
+            rate_dem_max    = int(b_ug * (1 - min(0.99, max(0.01, b_on + max_off / 100))))
+            rate_contrib    = rate_dem_max - b_dem
+            rate_gap_pct    = rate_contrib / gap * 100 if gap else 0
+
+            oos_dem_max     = int(b_ug * b_off * (1 + max_oos * 0.015))
+            oos_contrib     = oos_dem_max - b_dem
+            oos_gap_pct     = oos_contrib / gap * 100 if gap else 0
+
+            combined_dem    = int(
+                b_ug * (1 + max_enroll / 100) *
+                (1 - min(0.99, max(0.01, b_on + max_off / 100))) *
+                (1 + max_oos * 0.015))
+            can_close       = combined_dem >= target_dem
+            verdict_color   = C['GREEN'] if can_close else C['RED']
+            verdict_text    = 'TARGET IS ACHIEVABLE' if can_close else 'TARGET NOT ACHIEVABLE'
+            verdict_sub     = (
+                f'Combined levers reach {combined_dem:,} beds' if can_close
+                else f'Combined levers reach {combined_dem:,} beds — '
+                     f'{target_dem - combined_dem:,} beds short')
+
+            st.markdown(
+                f'<div class="card" style="padding:16px;margin-bottom:16px;'
+                f'border-color:{verdict_color}44;">'
+                f'<div style="font-size:10px;font-weight:700;letter-spacing:.15em;'
+                f'text-transform:uppercase;color:{verdict_color};margin-bottom:4px;">'
+                f'{verdict_text}</div>'
+                f'<div style="font-size:12px;color:{C["MUTED"]};">{verdict_sub}</div>'
+                f'</div>',
+                unsafe_allow_html=True)
+
+            # Gap closure bars
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin-bottom:10px;">How Each Lever Closes the Gap</div>',
+                unsafe_allow_html=True)
+
+            levers = [
+                ('Enrollment Growth',      enroll_contrib, enroll_gap_pct, C['GOLD']),
+                ('On-Campus Rate Shift',   rate_contrib,   rate_gap_pct,   C['GREEN']),
+                ('OOS Share Growth',       oos_contrib,    oos_gap_pct,    C['TEAL']),
+            ]
+            for lname, lval, lpct, lcol in levers:
+                bar_w   = min(abs(lpct), 100)
+                val_col = lcol if lval >= 0 else C['RED']
+                sign_l  = '+' if lval >= 0 else ''
+                sign_p  = '+' if lpct >= 0 else ''
+                st.markdown(
+                    f'<div style="margin-bottom:14px;">'
+                    f'<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'
+                    f'<div style="font-size:12px;color:{C["IVORY"]};">{lname}</div>'
+                    f'<div style="font-size:12px;font-weight:600;color:{val_col};">'
+                    f'{sign_l}{lval:,} beds '
+                    f'<span style="color:{C["MUTED"]};font-size:11px;">'
+                    f'({sign_p}{lpct:.0f}% of gap)</span></div></div>'
+                    f'<div style="height:6px;background:{C["BORDER"]};border-radius:3px;">'
+                    f'<div style="width:{bar_w}%;height:6px;background:{val_col};'
+                    f'border-radius:3px;opacity:0.85;"></div></div>'
+                    f'</div>',
+                    unsafe_allow_html=True)
+
+            # 5yr line chart
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin:16px 0 10px;">Baseline vs Target vs Combined Levers</div>',
+                unsafe_allow_html=True)
+
+            import numpy as _np2
+            from scipy import stats as _stats2
+            ev2 = sp[['academic_year', 'total_undergrad']].dropna()
+            if len(ev2) >= 3:
+                _sl2, _, _, _, _ = _stats2.linregress(
+                    ev2['academic_year'].values,
+                    _np2.log(ev2['total_undergrad'].values))
+                _base_et2 = (_np2.exp(_sl2) - 1) * 100
+            else:
+                _base_et2 = 0.0
+
+            yr2         = [f'Yr {y}' for y in range(1, 6)]
+            base_traj2  = [int(b_ug * (1 + _base_et2 / 100) ** y * b_off) for y in range(1, 6)]
+            comb_traj2  = [int(b_ug * (1 + max_enroll / 100) *
+                               (1 + _base_et2 / 100) ** y *
+                               (1 - min(0.99, max(0.01, b_on + max_off / 100))) *
+                               (1 + max_oos * 0.015))
+                           for y in range(1, 6)]
+            target_line = [target_dem] * 5
+
+            fig_rev = base_fig(240, legend=True, hovermode='x unified')
+            fig_rev.add_scatter(
+                x=yr2, y=base_traj2, name='Baseline',
+                line=dict(color=C['MUTED'], dash='dash', width=2),
+                mode='lines+markers', marker=dict(size=4))
+            fig_rev.add_scatter(
+                x=yr2, y=target_line, name='Target',
+                line=dict(color=C['AMBER'], dash='dot', width=2),
+                mode='lines')
+            fig_rev.add_scatter(
+                x=yr2, y=comb_traj2, name='Combined Levers',
+                line=dict(color=C['GREEN'], width=2),
+                mode='lines+markers', marker=dict(size=5),
+                fill='tonexty' if can_close else None,
+                fillcolor='rgba(110,158,110,0.07)')
+            xd_r, yd_r = ax(ytitle='Beds')
+            fig_rev.update_layout(xaxis=xd_r, yaxis=yd_r)
+            st.plotly_chart(fig_rev, use_container_width=True)
+
+            # Single-lever requirements
+            st.markdown(
+                f'<div style="color:{C["MUTED"]};font-size:11px;text-transform:uppercase;'
+                f'letter-spacing:.1em;margin:4px 0 10px;">What It Takes — Single Lever</div>',
+                unsafe_allow_html=True)
+            if gap > 0 and b_off > 0:
+                req_enroll_pct = ((target_dem / b_off) / b_ug - 1) * 100
+                req_off_pp     = (target_dem / b_ug - b_off) * 100
+                for rname, rval, feasible in [
+                    ('Enrollment alone',    f'+{req_enroll_pct:.1f}%',       req_enroll_pct <= max_enroll),
+                    ('On-campus rate alone', f'{req_off_pp:+.1f}pp off-campus', req_off_pp >= abs(max_off)),
+                ]:
+                    fc_col = C['GREEN'] if feasible else C['RED']
+                    fc_txt = 'Within limit' if feasible else 'Exceeds limit'
+                    st.markdown(
+                        f'<div style="display:flex;justify-content:space-between;'
+                        f'padding:8px 0;border-bottom:1px solid {C["BORDER"]};">'
+                        f'<div style="font-size:12px;color:{C["IVORY"]};">{rname}</div>'
+                        f'<div style="font-size:12px;font-weight:600;color:{fc_col};">'
+                        f'{rval} '
+                        f'<span style="font-size:10px;color:{fc_col};">({fc_txt})</span>'
+                        f'</div></div>',
+                        unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════════════
 # DATA TABLE

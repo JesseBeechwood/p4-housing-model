@@ -669,16 +669,23 @@ def _extract_table_based(filepath, school_name, year):
                 _housing_sheet       = sh
 
             # Handle unlabeled housing rows (Michigan style):
-            # After the F1 header, rows of just numbers appear: on-campus row then off-campus row
+            # After the F1 housing header, rows of just numbers: on-campus row then off-campus row
+            # Only trigger on rows that look like housing rates — not in-state/OOS rows
             if (_housing_header_seen and sh == _housing_sheet and
                     'pct_ug_on_campus' not in data and
-                    i > _housing_header_row and i <= _housing_header_row + 6):
-                nvs = [(j, sf(c)) for j, c in enumerate(row)
-                       if sf(c) is not None and 0.05 < sf(c) < 1.0]
-                if len(nvs) >= 2 and 'live' not in row_text:
-                    # Row with 2 values 0.05-1.0 and no text = on-campus rates
-                    data['pct_ftfy_on_campus'] = round(nvs[0][1], 4)
-                    data['pct_ug_on_campus']   = round(nvs[1][1], 4)
+                    i > _housing_header_row and i <= _housing_header_row + 4):
+                # Exclude rows that contain text suggesting they're something else
+                exclude_kws = ['state', 'international', 'nonresident', 'citizen',
+                               'race', 'ethnic', 'age', 'gender', 'percent who are']
+                if not any(kw in row_text for kw in exclude_kws):
+                    nvs = [(j, sf(c)) for j, c in enumerate(row)
+                           if sf(c) is not None and 0.05 < sf(c) < 1.0]
+                    # Must have exactly 2 values (FTFY and UG columns) and no other text
+                    text_cells = [c for c in row if c is not None and isinstance(c, str)
+                                  and len(c.strip()) > 3]
+                    if len(nvs) >= 2 and len(text_cells) == 0:
+                        data['pct_ftfy_on_campus'] = round(nvs[0][1], 4)
+                        data['pct_ug_on_campus']   = round(nvs[1][1], 4)
 
             if 'live in college-owned' in row_text or ('affiliated' in row_text and 'housing' in row_text and 'percent' in row_text):
                 if 'pct_ug_on_campus' not in data:

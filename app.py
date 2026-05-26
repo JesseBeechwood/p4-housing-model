@@ -14,6 +14,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 from extractor import load_all_cds
 from regression_engine import run_full_analysis
 from zillow_loader import load_zillow
+try:
+    from wiche_loader import load_wiche, get_wiche_signal
+except ImportError:
+    load_wiche = None; get_wiche_signal = None
 from supply_data import get_supply_score, supply_signal, SUPPLY_DATA
 from ipeds_loader import load_ipeds, get_ipeds_school_result
 from collegehouse_loader import load_all_collegehouse, get_supply_score_ch, supply_signal_ch
@@ -559,12 +563,23 @@ def load():
         ch = load_all_collegehouse(Path(__file__).parent)
     except Exception:
         pass
-    return run_full_analysis(raw, zillow_data=zillow, ch_data=ch), zillow
+    wiche = {}
+    try:
+        if load_wiche:
+            wiche = load_wiche(Path(__file__).parent / 'wiche_projections.xlsx')
+    except Exception:
+        pass
+    return run_full_analysis(raw, zillow_data=zillow, ch_data=ch, wiche_data=wiche), zillow, wiche
 
 def _unpack():
     result = load()
     if result[0] is None: return None,None,None,None,None,None
-    (panel,regressions,school_results), zillow = result
+    result_unpacked = result
+    if len(result_unpacked) == 3:
+        (panel,regressions,school_results), zillow, wiche_data = result_unpacked
+    else:
+        (panel,regressions,school_results), zillow = result_unpacked
+        wiche_data = {}
     all_school_results = dict(school_results)
     try:
         ipeds_df = load_ipeds(Path(__file__).parent / 'ipeds_2024.csv')
@@ -766,6 +781,32 @@ if page == 'School Dashboard':
     with c5: st.metric('Instate Tuition',fmt(sr['tuition_instate'],'money'))
     with c6: st.metric('Avg Aid Package',fmt(sr.get('avg_aid_package'),'money'))
     st.markdown('<br>',unsafe_allow_html=True)
+
+
+    # ── WICHE Pipeline Signal ─────────────────────────────────────────────
+    _wsr = sr.get('wiche_signal', {})
+    if _wsr and _wsr.get('available'):
+        _wt    = _wsr.get('tier', '')
+        _wpct  = _wsr.get('trend_pct', 0)
+        _wst   = _wsr.get('state', '')
+        _wby   = _wsr.get('base_year', '')
+        _why   = _wsr.get('horizon_year', '')
+        _wcolor = (C['GREEN'] if _wt == 'GROWING' else
+                   C['AMBER'] if _wt == 'STABLE' else
+                   C['RED']   if _wt in ('DECLINING','SHARP_DECLINE') else C['MUTED'])
+        _wsign = '+' if _wpct >= 0 else ''
+        st.markdown(
+            f'<div style="background:{C["CARD"]};border-left:3px solid {_wcolor};'
+            f'padding:8px 16px;margin:0 0 8px;font-size:11px;color:{C["MUTED"]};">'
+            f'<span style="font-size:9px;font-weight:700;letter-spacing:.15em;'
+            f'text-transform:uppercase;color:{_wcolor};margin-right:12px;">HS PIPELINE</span>'
+            f'<span style="color:{C["IVORY"]};font-weight:600;margin-right:12px;">'
+            f'{_wsign}{_wpct:.1f}%</span>'
+            f'Projected change in {_wst} high school graduates '
+            f'{_wby}→{_why} &nbsp;·&nbsp; '
+            f'<span style="color:{_wcolor};">{_wt.replace("_"," ")}</span>'
+            f'</div>',
+            unsafe_allow_html=True)
 
     left,right = st.columns(2)
     with left:

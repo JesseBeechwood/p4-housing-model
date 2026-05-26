@@ -345,7 +345,53 @@ def forecast_school(school_data, reg3, n_years=FORECAST_YEARS, total_obs=10):
 
 
 
-def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=None):
+def _precompute_panel_norms(all_data, ch_data=None, zillow_data=None):
+    """Pre-compute all panel-level normalization values once for O(1) per-school scoring."""
+    from scipy import stats as _stats
+    norms = {}
+
+    if 'off_campus_demand' in all_data.columns:
+        d = np.log1p(all_data['off_campus_demand'].dropna().values)
+        norms['demand_log_min'] = float(d.min()); norms['demand_log_max'] = float(d.max())
+    for col, key in [('pct_ug_off_campus','off_rate'), ('pct_oos_ug','oos')]:
+        if col in all_data.columns:
+            v = all_data[col].dropna()
+            norms[f'{key}_min'] = float(v.min()); norms[f'{key}_max'] = float(v.max())
+
+    if ch_data:
+        all_occ  = [ch_data[s].get('occupancy_rate')       for s in ch_data if ch_data[s].get('occupancy_rate') is not None]
+        all_bts  = [ch_data[s].get('bed_to_student_ratio') for s in ch_data if ch_data[s].get('bed_to_student_ratio') is not None]
+        all_pipe = [ch_data[s].get('pipeline_pct',0) or 0  for s in ch_data]
+        if all_occ:  norms['occ_min']  = min(all_occ);  norms['occ_max']  = max(all_occ)
+        if all_bts:  norms['bts_min']  = min(all_bts);  norms['bts_max']  = max(all_bts)
+        if all_pipe: norms['pipe_min'] = min(all_pipe); norms['pipe_max'] = max(all_pipe)
+
+    all_wt = []; all_rt = []
+    for s_school in all_data['school'].unique():
+        sg = all_data[all_data['school']==s_school].sort_values('academic_year')
+        ev = sg[['academic_year','total_undergrad']].dropna()
+        if len(ev) >= 3:
+            sl,_,_,sp,_ = _stats.linregress(ev['academic_year'].values, np.log(ev['total_undergrad'].values))
+            et = (np.exp(sl)-1)*100
+            cw = 1.0 if sp < 0.05 else (0.5 if sp < 0.15 else 0.25)
+            all_wt.append(et*cw)
+        rv = sg[['academic_year','pct_ug_off_campus']].dropna()
+        if len(rv) >= 3 and rv['pct_ug_off_campus'].std() > 0.005:
+            rsl,_,_,_,_ = _stats.linregress(rv['academic_year'].values, rv['pct_ug_off_campus'].values)
+            all_rt.append(rsl*100)
+    if all_wt: norms['trend_min'] = min(all_wt); norms['trend_max'] = max(all_wt)
+    if all_rt:  norms['rate_trend_min'] = min(all_rt); norms['rate_trend_max'] = max(all_rt)
+
+    if zillow_data:
+        from zillow_loader import score_component as _zsc
+        zs = [_zsc(s, zillow_data) for s in zillow_data]
+        zs = [z for z in zs if z is not None]
+        if zs: norms['zillow_min'] = min(zs); norms['zillow_max'] = max(zs)
+
+    return norms
+
+
+def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=None, _norms=None, wiche_data=None):
     """
     Investment score 0-1: four-component model built from what the data shows
     actually matters for student housing market selection.
@@ -371,7 +417,7 @@ def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=No
     from scipy import stats as _stats
 
     grp = school_data.sort_values('academic_year')
-    school = grp['school'].iloc[0] if 'school' in grp.columns else None
+    school = grp['school'].iloc[0] if ('school' in grp.columns and len(grp) > 0) else None
 
     def lv(col):
         return _last_valid(grp[col]) if col in grp.columns else None
@@ -484,7 +530,26 @@ def compute_investment_score(school_data, all_data, zillow_data=None, ch_data=No
         n_enroll = norm_custom(weighted_trend, all_weighted_trends) if all_weighted_trends else 0.5
         n_rate   = norm_custom(rate_trend, all_rate_trends) if all_rate_trends else 0.5
 
-        growth_score = 0.70 * (n_enroll or 0.5) + 0.30 * (n_rate or 0.5)
+        # Incorporate WICHE HS graduate projections if available
+        n_wiche = None
+        if wiche_data:
+            school = school_data['school'].iloc[0] if 'school' in school_data.columns else None
+            if school:
+                try:
+                    from wiche_loader import score_wiche as _sw
+                    wiche_raw = _sw(school, wiche_data)
+                    if wiche_raw is not None and _norms and 'wiche_min' in _norms:
+                        mn, mx = _norms['wiche_min'], _norms['wiche_max']
+                        n_wiche = float(np.clip((wiche_raw - mn) / (mx - mn + 1e-9), 0, 1)) if mx != mn else 0.5
+                except Exception:
+                    pass
+
+        if n_wiche is not None:
+            # WICHE available: 50% enroll trend, 20% rate trend, 30% WICHE pipeline
+            growth_score = 0.50 * (n_enroll or 0.5) + 0.20 * (n_rate or 0.5) + 0.30 * n_wiche
+        else:
+            # No WICHE: fall back to original weights
+            growth_score = 0.70 * (n_enroll or 0.5) + 0.30 * (n_rate or 0.5)
 
     # ── RENT HEADROOM (15%) ─────────────────────────────────────────────────
     rent_score = None
@@ -522,17 +587,40 @@ def score_to_signal(score):
     else:               return 'AVOID',       '#A32D2D'
 
 
-def run_full_analysis(raw_panel, zillow_data=None, ch_data=None):
+def run_full_analysis(raw_panel, zillow_data=None, ch_data=None, wiche_data=None):
     panel       = build_panel(raw_panel)
     regressions = run_regressions(panel)
     reg3        = regressions.get('reg3')
     total_obs   = len(panel)
 
+    # Add WICHE normalization range if available
+    if wiche_data:
+        try:
+            from wiche_loader import score_wiche as _sw
+            wiche_vals = [_sw(s, wiche_data) for s in panel['school'].unique()]
+            wiche_vals = [v for v in wiche_vals if v is not None]
+            if wiche_vals:
+                _norms['wiche_min'] = min(wiche_vals)
+                _norms['wiche_max'] = max(wiche_vals)
+        except Exception:
+            pass
+
+    # Pre-compute panel norms once for O(1) per-school scoring
+    _norms = _precompute_panel_norms(panel, ch_data=ch_data, zillow_data=zillow_data)
+    if wiche_data:
+        try:
+            from wiche_loader import score_wiche as _sw
+            wv = [_sw(s, wiche_data) for s in panel['school'].unique()]
+            wv = [v for v in wv if v is not None]
+            if wv: _norms['wiche_min'] = min(wv); _norms['wiche_max'] = max(wv)
+        except Exception:
+            pass
+
     school_results = {}
     for school, grp in panel.groupby('school'):
         grp      = grp.sort_values('academic_year')
         forecast = forecast_school(grp, reg3, total_obs=total_obs)
-        score    = compute_investment_score(grp, panel, zillow_data=zillow_data, ch_data=ch_data)
+        score    = compute_investment_score(grp, panel, zillow_data=zillow_data, ch_data=ch_data, _norms=_norms, wiche_data=wiche_data)
         signal, color = score_to_signal(score)
         trends   = estimate_school_trends(grp)
 
@@ -542,6 +630,8 @@ def run_full_analysis(raw_panel, zillow_data=None, ch_data=None):
         school_results[school] = {
             'panel':             grp,
             'forecast':          forecast,
+            'forecast_ci':       None,
+            'wiche_signal':      __import__('wiche_loader').get_wiche_signal(school, wiche_data) if wiche_data else {},
             'trends':            trends,
             'investment_score':  round(score, 3),
             'signal':            signal,

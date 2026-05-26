@@ -166,13 +166,27 @@ def extract_cds(filepath, school_name, year):
     # Sheet name aliases — some universities use descriptive names instead of CDS-B/CDS-F
     SHEET_ALIASES = {
         'CDS-B': ['CDS-B', 'B Enrollment', 'B. Enrollment', 'B - Enrollment',
-                  'B. ENROLLMENT AND PERSISTENCE', 'Enrollment'],
+                  'B. ENROLLMENT AND PERSISTENCE', 'Enrollment',
+                  'B',                                           # Auburn single-letter
+                  'B. Enrollment and Persistence',               # Mississippi State
+                  'B. ENROLLMENT AND PERSISTENCE',
+                  'B. Enrollment and Persistence -',             # Auburn 2023-24 trailing suffix
+                  'B. Enrollment and Persistence-'],
         'CDS-F': ['CDS-F', 'F Student Life', 'F. Student Life', 'F - Student Life',
-                  'F. STUDENT LIFE', 'Student Life'],
+                  'F. STUDENT LIFE', 'Student Life',
+                  'F',                                           # Auburn single-letter
+                  'F. Student Life',                             # Mississippi State
+                  'F. STUDENT LIFE',
+                  'F. Student Life - 2023', 'F. Student Life - 2022',  # Auburn year-suffixed
+                  'F. Student Life - 2021', 'F. Student Life - 2024'],
         'CDS-G': ['CDS-G', 'G Annual Expense', 'G. Annual Expenses', 'G - Annual Expense',
-                  'G. ANNUAL EXPENSES', 'Annual Expenses'],
+                  'G. ANNUAL EXPENSES', 'Annual Expenses',
+                  'G',                                           # Auburn single-letter
+                  'G. Annual Expenses and Financial Aid'],
         'CDS-H': ['CDS-H', 'H Financial Aid', 'H. Financial Aid', 'H - Financial Aid',
-                  'H. FINANCIAL AID', 'Financial Aid'],
+                  'H. FINANCIAL AID', 'Financial Aid',
+                  'H',                                           # Auburn single-letter
+                  'H. Financial Aid'],
     }
 
     def sheet(name):
@@ -214,7 +228,7 @@ def extract_cds(filepath, school_name, year):
                             nums.append(v)
                     if nums:
                         # If multiple large numbers it is split by gender — sum them
-                        if len(nums) >= 2 and sum(nums[:2]) > 20000:
+                        if len(nums) >= 2 and sum(nums[:2]) > 3000:
                             data['total_undergrad'] = int(sum(nums[:2]))
                         else:
                             data['total_undergrad'] = int(nums[0])
@@ -617,10 +631,17 @@ def _extract_table_based(filepath, school_name, year):
                         data['total_undergrad'] = int(v)
 
                 if 'total all undergraduates' in row_text:
-                    for j, cell in enumerate(row):
-                        v = sf(cell)
-                        if v and 1000 < v < 100000:
-                            data['total_undergrad'] = int(v); break
+                    # Prefer the largest value in the row — last column is often the grand total
+                    nvs = [sf(c) for c in row if sf(c) is not None and 1000 < sf(c) < 200000]
+                    if nvs:
+                        data['total_undergrad'] = int(max(nvs))
+
+                if ('total undergraduate students' in row_text or
+                    'total undergraduates' in row_text) and 'total_undergrad' not in data:
+                    # Sum all numeric values (men + women + other + unknown columns)
+                    nvs = [sf(c) for c in row if sf(c) is not None and 100 < sf(c) < 100000]
+                    if nvs and sum(nvs) > 1000:
+                        data['total_undergrad'] = int(sum(nvs))
                     if 'total_undergrad' not in data:
                         # Check next row
                         if i + 1 < len(df):
@@ -673,11 +694,21 @@ def _extract_table_based(filepath, school_name, year):
                         data['pct_ug_on_campus'] = round(nvs[0][1], 4)
 
             if 'live off campus or commute' in row_text:
-                if 'pct_ug_off_campus' not in data:
+                # Check if this is a FTFY row (F105 code) vs UG row (F113 code)
+                is_ftfy_row = 'f105' in row_text or ('f10' in row_text and 'f11' not in row_text)
+                is_ug_row   = 'f113' in row_text or 'f112' in row_text
+
+                if is_ftfy_row and 'pct_ftfy_off_campus' not in data:
+                    # Store FTFY separately, don't overwrite UG
                     nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) is not None and 0 < sf(c) < 2.0]
                     if not nvs:
-                        nvs_pct = [(j, sf(c)/100) for j, c in enumerate(row) if sf(c) is not None and 1 < sf(c) <= 100]
-                        nvs = nvs_pct
+                        nvs = [(j, sf(c)/100) for j, c in enumerate(row) if sf(c) is not None and 1 < sf(c) <= 100]
+                    if nvs:
+                        data['pct_ftfy_off_campus'] = round(nvs[0][1], 4)
+                elif is_ug_row or (not is_ftfy_row and 'pct_ug_off_campus' not in data):
+                    nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) is not None and 0 < sf(c) < 2.0]
+                    if not nvs:
+                        nvs = [(j, sf(c)/100) for j, c in enumerate(row) if sf(c) is not None and 1 < sf(c) <= 100]
                     if len(nvs) >= 2:
                         data['pct_ftfy_off_campus'] = round(nvs[0][1], 4)
                         data['pct_ug_off_campus']   = round(nvs[1][1], 4)

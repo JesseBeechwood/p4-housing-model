@@ -95,6 +95,23 @@ SCHOOL_METRO_MAP = {
     'USC':                  'Los Angeles, CA',
     'Washington':           'Seattle, WA',
     'Wisconsin':            'Madison, WI',
+    # ── SEC ──────────────────────────────────────────────────────────────
+    'Alabama':          'Tuscaloosa, AL',
+    'Arkansas':         'Fayetteville, AR',
+    'Auburn':           'Auburn, AL',
+    'Florida':          'Gainesville, FL',
+    'Georgia':          'Athens, GA',
+    'Kentucky':         'Lexington, KY',
+    'LSU':              'Baton Rouge, LA',
+    'Mississippi':      'Oxford, MS',
+    'MississippiState': 'Starkville, MS',
+    'Missouri':         'Columbia, MO',
+    'Oklahoma':         'Norman, OK',
+    'SouthCarolina':    'Columbia, SC',
+    'Tennessee':        'Knoxville, TN',
+    'Texas':            'Austin, TX',
+    'TexasAM':          'College Station, TX',
+    'Vanderbilt':       'Nashville, TN',
 }
 
 def _annual_avg(series):

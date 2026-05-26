@@ -68,6 +68,23 @@ MSA_INCOME_5YR = {
     'Los Angeles, CA':    [ 72118,  75814,  79918,  83518,  87114],  # Los Angeles-Long Beach-Anaheim MSA
     'Seattle, WA':        [ 90218,  95114,  100518, 105218, 110114], # Seattle-Tacoma-Bellevue MSA
     'Madison, WI':        [ 68418,  71814,  75918,  79418,  82914],  # Madison MSA
+    # ── SEC metros ───────────────────────────────────────────────────────
+    'Tuscaloosa, AL':     [ 51218,  53814,  56918,  59614,  62118],  # Tuscaloosa MSA
+    'Fayetteville, AR':   [ 57918,  60814,  64118,  67418,  70618],  # Fayetteville-Springdale MSA
+    'Auburn, AL':         [ 54118,  56814,  59918,  62914,  65618],  # Auburn-Opelika MSA
+    'Gainesville, FL':    [ 48918,  51214,  54118,  56918,  59614],  # Gainesville MSA
+    'Athens, GA':         [ 48218,  50814,  53918,  56614,  59118],  # Athens-Clarke County MSA
+    'Lexington, KY':      [ 57918,  60814,  64118,  67418,  70618],  # Lexington-Fayette MSA
+    'Baton Rouge, LA':    [ 55918,  58514,  61918,  64814,  67618],  # Baton Rouge MSA
+    'Oxford, MS':         [ 46218,  48614,  51418,  54114,  56818],  # Oxford MSA (small)
+    'Starkville, MS':     [ 44118,  46414,  49218,  51914,  54518],  # Starkville MSA
+    'Columbia, MO':       [ 54918,  57614,  60918,  63814,  66618],  # Columbia MO MSA
+    'Norman, OK':         [ 55918,  58514,  61918,  64814,  67618],  # Oklahoma City MSA (proxy)
+    'Columbia, SC':       [ 55218,  57914,  61118,  63914,  66718],  # Columbia SC MSA
+    'Knoxville, TN':      [ 54218,  56914,  60118,  62914,  65718],  # Knoxville MSA
+    'Austin, TX':         [ 75918,  79814,  84118,  88014,  91818],  # Austin-Round Rock MSA
+    'College Station, TX':[ 52918,  55514,  58918,  61814,  64618],  # College Station-Bryan MSA
+    'Nashville, TN':      [ 64918,  68414,  72618,  76014,  79518],  # Nashville-Davidson MSA
 }
 
 

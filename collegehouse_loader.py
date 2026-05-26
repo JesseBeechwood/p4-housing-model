@@ -73,6 +73,23 @@ def load_collegehouse(school, folder=None):
         'USC':              ['usc','uclasc','los-angeles-ca'],
         'Washington':       ['washington','seattle-wa','university_of_washington'],
         'Wisconsin':        ['wisconsin','madison-wi','university_of_wisconsin'],
+        # ── SEC ─────────────────────────────────────────────────────────────
+        'Alabama':          ['alabama','tuscaloosa-al','university_of_alabama'],
+        'Arkansas':         ['arkansas','fayetteville-ar','university_of_arkansas'],
+        'Auburn':           ['auburn','auburn-al','auburn_university'],
+        'Florida':          ['florida','gainesville-fl','university_of_florida'],
+        'Georgia':          ['georgia','athens-ga','university_of_georgia'],
+        'Kentucky':         ['kentucky','lexington-ky','university_of_kentucky'],
+        'LSU':              ['lsu','baton-rouge-la','louisiana_state'],
+        'Mississippi':      ['mississippi','oxford-ms','ole_miss'],
+        'MississippiState': ['mississippistate','starkville-ms','mississippi_state'],
+        'Missouri':         ['missouri','columbia-mo','university_of_missouri'],
+        'Oklahoma':         ['oklahoma','norman-ok','university_of_oklahoma'],
+        'SouthCarolina':    ['southcarolina','columbia-sc','university_of_south_carolina'],
+        'Tennessee':        ['tennessee','knoxville-tn','university_of_tennessee'],
+        'Texas':            ['texas','austin-tx','university_of_texas'],
+        'TexasAM':          ['texasam','college-station-tx','texas_a_m'],
+        'Vanderbilt':       ['vanderbilt','nashville-tn','vanderbilt_university'],
     }
     aliases = school_aliases.get(school, [school.lower()])
     patterns = []

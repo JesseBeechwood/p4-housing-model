@@ -78,6 +78,23 @@ SCHOOL_STATE = {
     'USC':                  'CA',
     'Washington':           'WA',
     'Wisconsin':            'WI',
+    # ── SEC ──────────────────────────────────────────────────────────────
+    'Alabama':          'AL',
+    'Arkansas':         'AR',
+    'Auburn':           'AL',
+    'Florida':          'FL',
+    'Georgia':          'GA',
+    'Kentucky':         'KY',
+    'LSU':              'LA',
+    'Mississippi':      'MS',
+    'MississippiState': 'MS',
+    'Missouri':         'MO',
+    'Oklahoma':         'OK',
+    'SouthCarolina':    'SC',
+    'Tennessee':        'TN',
+    'Texas':            'TX',
+    'TexasAM':          'TX',
+    'Vanderbilt':       'TN',
 }
 
 

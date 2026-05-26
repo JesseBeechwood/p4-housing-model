@@ -56,6 +56,23 @@ def load_collegehouse(school, folder=None):
         'UCF':                  ['ucf','orlando-fl','central_florida'],
         'Utah':                 ['utah','salt-lake-city-ut','university_of_utah'],
         'WestVirginia':         ['westvirginia','west_virginia','morgantown-wv','wvu'],
+        # ── Big Ten ──────────────────────────────────────────────────────────
+        'Illinois':         ['illinois','champaign-il','uiuc'],
+        'Indiana':          ['indiana','bloomington-in','indiana_university'],
+        'IowaHawkeyes':     ['iowahawkeyes','iowa-city-ia','iowa_hawkeyes'],
+        'Michigan':         ['michigan','ann-arbor-mi','university_of_michigan'],
+        'MichiganState':    ['michiganstate','east-lansing-mi','michigan_state'],
+        'Minnesota':        ['minnesota','minneapolis-mn','university_of_minnesota'],
+        'Nebraska':         ['nebraska','lincoln-ne','university_of_nebraska'],
+        'OhioState':        ['ohiostate','columbus-oh','ohio_state'],
+        'Oregon':           ['oregon','eugene-or','university_of_oregon'],
+        'PennState':        ['pennstate','state-college-pa','penn_state'],
+        'Purdue':           ['purdue','west-lafayette-in','purdue_university'],
+        'Rutgers':          ['rutgers','new-brunswick-nj','rutgers_university'],
+        'UCLA':             ['ucla','uclasc','los-angeles-ca'],
+        'USC':              ['usc','uclasc','los-angeles-ca'],
+        'Washington':       ['washington','seattle-wa','university_of_washington'],
+        'Wisconsin':        ['wisconsin','madison-wi','university_of_wisconsin'],
     }
     aliases = school_aliases.get(school, [school.lower()])
     patterns = []

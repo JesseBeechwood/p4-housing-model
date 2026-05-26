@@ -78,6 +78,23 @@ SCHOOL_METRO_MAP = {
     'SMU':                  'Dallas, TX',
     'ColoradoBoulder':      'Denver, CO',
     'OklahomaState':        'Oklahoma City, OK',
+    # ── Big Ten ──────────────────────────────────────────────────────────
+    'Illinois':             'Chicago, IL',
+    'Indiana':              'Indianapolis, IN',
+    'IowaHawkeyes':         'Iowa City, IA',
+    'Michigan':             'Detroit, MI',
+    'MichiganState':        'Detroit, MI',
+    'Minnesota':            'Minneapolis, MN',
+    'Nebraska':             'Omaha, NE',
+    'OhioState':            'Columbus, OH',
+    'Oregon':               'Eugene, OR',
+    'PennState':            'State College, PA',
+    'Purdue':               'Lafayette, IN',
+    'Rutgers':              'New York, NY',
+    'UCLA':                 'Los Angeles, CA',
+    'USC':                  'Los Angeles, CA',
+    'Washington':           'Seattle, WA',
+    'Wisconsin':            'Madison, WI',
 }
 
 def _annual_avg(series):

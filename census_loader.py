@@ -53,6 +53,21 @@ MSA_INCOME_5YR = {
     'Lubbock, TX':        [ 52188,  54614,  57288,  59724,  62341],  # Lubbock MSA
     'Charleston, WV':     [ 51224,  53118,  55642,  57918,  60244],  # Charleston WV MSA
     'Waco, TX':           [ 51884,  54218,  57114,  59618,  62088],  # Waco MSA (use as Baylor proxy)
+    # ── Big Ten metros ────────────────────────────────────────────────────
+    'Chicago, IL':        [ 72118,  75884,  79248,  82614,  85918],  # Chicago-Naperville-Elgin MSA
+    'Indianapolis, IN':   [ 62188,  65414,  69118,  72544,  75918],  # Indianapolis-Carmel-Anderson MSA
+    'Iowa City, IA':      [ 62418,  65118,  68844,  71918,  74814],  # Iowa City MSA
+    'Detroit, MI':        [ 62914,  66188,  70214,  73844,  77118],  # Detroit-Warren-Dearborn MSA
+    'Minneapolis, MN':    [ 80218,  84114,  88518,  92418,  96188],  # Minneapolis-St. Paul MSA
+    'Omaha, NE':          [ 66418,  69814,  73918,  77214,  80618],  # Omaha-Council Bluffs MSA
+    'Columbus, OH':       [ 65918,  69314,  73218,  76814,  80118],  # Columbus MSA
+    'Eugene, OR':         [ 54118,  56814,  60118,  63218,  66114],  # Eugene-Springfield MSA
+    'State College, PA':  [ 57418,  59814,  62918,  65818,  68414],  # State College MSA
+    'Lafayette, IN':      [ 57918,  60418,  63814,  66918,  69814],  # Lafayette-West Lafayette MSA
+    'New York, NY':       [ 74918,  78114,  82518,  86218,  89914],  # New York-Newark-Jersey City MSA
+    'Los Angeles, CA':    [ 72118,  75814,  79918,  83518,  87114],  # Los Angeles-Long Beach-Anaheim MSA
+    'Seattle, WA':        [ 90218,  95114,  100518, 105218, 110114], # Seattle-Tacoma-Bellevue MSA
+    'Madison, WI':        [ 68418,  71814,  75918,  79418,  82914],  # Madison MSA
 }
 
 

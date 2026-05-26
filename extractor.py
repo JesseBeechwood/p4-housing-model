@@ -158,13 +158,35 @@ def extract_cds(filepath, school_name, year):
     preformatted, _ = _is_preformatted(filepath)
     if preformatted:
         return extract_preformatted(filepath, school_name, year)
+    # Auto-detect numbered-table format (Big Ten style)
+    if _is_table_based(filepath):
+        return _extract_table_based(filepath, school_name, year)
     data = {'school': school_name, 'academic_year': year}
 
+    # Sheet name aliases — some universities use descriptive names instead of CDS-B/CDS-F
+    SHEET_ALIASES = {
+        'CDS-B': ['CDS-B', 'B Enrollment', 'B. Enrollment', 'B - Enrollment',
+                  'B. ENROLLMENT AND PERSISTENCE', 'Enrollment'],
+        'CDS-F': ['CDS-F', 'F Student Life', 'F. Student Life', 'F - Student Life',
+                  'F. STUDENT LIFE', 'Student Life'],
+        'CDS-G': ['CDS-G', 'G Annual Expense', 'G. Annual Expenses', 'G - Annual Expense',
+                  'G. ANNUAL EXPENSES', 'Annual Expenses'],
+        'CDS-H': ['CDS-H', 'H Financial Aid', 'H. Financial Aid', 'H - Financial Aid',
+                  'H. FINANCIAL AID', 'Financial Aid'],
+    }
+
     def sheet(name):
+        # Try exact name first, then aliases
         try:
             return pd.read_excel(filepath, sheet_name=name, header=None)
         except:
-            return pd.DataFrame()
+            pass
+        for alias in SHEET_ALIASES.get(name, []):
+            try:
+                return pd.read_excel(filepath, sheet_name=alias, header=None)
+            except:
+                pass
+        return pd.DataFrame()
 
     # ── CDS-B: Enrollment & Retention ────────────────────────────────────
     b = sheet('CDS-B')
@@ -402,7 +424,8 @@ def extract_cds(filepath, school_name, year):
                 if not isinstance(cell, str):
                     continue
                 cl = cell.strip().lower()
-                if ('tuition: in-district' in cl or 'tuition: in-state' in cl) and 'tuition_instate' not in data:
+                if ('tuition: in-district' in cl or 'tuition: in-state' in cl or
+                         'in-state (out-of-district) tuition' in cl or 'in-district tuition' in cl) and 'tuition_instate' not in data:
                     for k in range(j+1, min(j+6, len(row))):
                         v = _to_float(g.iloc[i, k])
                         if v and 1000 < v < 80000:
@@ -498,6 +521,240 @@ def extract_cds(filepath, school_name, year):
         data['greek_pct_total'] = round(data['greek_pct_male'] + data['greek_pct_female'], 4)
     if 'total_grad' in data and 'total_undergrad' in data:
         data['grad_share'] = round(data['total_grad'] / data['total_undergrad'], 4)
+
+    return data
+
+
+def _is_table_based(filepath):
+    """Detect files using numbered sheets (Table 1, Table 2, ...) — common Big Ten format."""
+    try:
+        xl = pd.ExcelFile(filepath)
+        sheets = xl.sheet_names
+        table_sheets = [s for s in sheets if s.strip().lower().startswith('table ')]
+        return len(table_sheets) >= 5
+    except:
+        return False
+
+
+def _extract_table_based(filepath, school_name, year):
+    """
+    Extract CDS data from files using numbered Table sheets.
+    Scans every sheet for keyword patterns and extracts values from adjacent cells.
+    Handles both clean column layouts and merged-cell formats.
+    """
+    data = {'school': school_name, 'academic_year': year}
+
+    try:
+        xl = pd.ExcelFile(filepath)
+        sheets = xl.sheet_names
+    except:
+        return data
+
+    def sf(v):
+        try:
+            return float(str(v).replace('$', '').replace(',', '').replace('%', '').strip())
+        except:
+            return None
+
+    def nums_in_row(row, df, i):
+        """Get all numeric values in a row, excluding unreasonably large ones."""
+        vals = []
+        for j, cell in enumerate(row):
+            v = sf(cell)
+            if v is not None and not (v > 1_000_000):
+                vals.append((j, v))
+        return vals
+
+    # Only scan tables 1-35 — data is always within first 35 tables
+    # This prevents timeouts on files with 100+ tables (Indiana has 260)
+    import re as _re
+    relevant_sheets = []
+    for sh in sheets:
+        m = _re.match(r'Table\s+(\d+)$', sh, _re.IGNORECASE)
+        if m and int(m.group(1)) <= 35:
+            relevant_sheets.append(sh)
+        elif not sh.lower().startswith('table'):
+            relevant_sheets.append(sh)
+
+    # Load all relevant sheets in a single call — much faster than per-sheet loading
+    try:
+        all_sheets_raw = pd.read_excel(filepath, sheet_name=relevant_sheets,
+                                       header=None, dtype=object)
+        all_sheets = all_sheets_raw if isinstance(all_sheets_raw, dict) else {relevant_sheets[0]: all_sheets_raw}
+    except Exception:
+        all_sheets = {}
+        for sh in relevant_sheets:
+            try:
+                all_sheets[sh] = pd.read_excel(filepath, sheet_name=sh, header=None, dtype=object)
+            except:
+                pass
+
+    # Track whether we've seen the F1 housing header (for unlabeled-row format like Michigan)
+    _housing_header_seen = False
+    _housing_header_row  = -1
+    _housing_sheet       = None
+
+    for sh, df in all_sheets.items():
+        for i in range(len(df)):
+            row = [df.iloc[i, j] for j in range(len(df.columns))]
+            # Flatten any newline-merged cells
+            row_text = ' '.join(str(c) for c in row if c is not None and str(c) != 'nan').lower()
+
+            # ── Total undergrad enrollment ──────────────────────────────
+            if 'total_undergrad' not in data:
+                # Handle enrollment from racial/ethnic breakdown table (Michigan format):
+                # Row label 'Total' with large numbers in columns for UG and FTFY
+                if row_text.strip() == 'total' or 'total' == row_text[:5]:
+                    nvs = [(j, sf(c)) for j, c in enumerate(row)
+                           if sf(c) is not None and 5000 < sf(c) < 150000]
+                    if nvs:
+                        data['total_undergrad'] = int(max(v for _, v in nvs))
+
+                # Handle lone large number in a row (Ohio State Table 1 format)
+                if (len([c for c in row if c is not None]) == 1):
+                    v = sf(row[0] if row[0] is not None else (row[1] if len(row) > 1 else None))
+                    if v and 10000 < v < 100000:
+                        data['total_undergrad'] = int(v)
+
+                if 'total all undergraduates' in row_text:
+                    for j, cell in enumerate(row):
+                        v = sf(cell)
+                        if v and 1000 < v < 100000:
+                            data['total_undergrad'] = int(v); break
+                    if 'total_undergrad' not in data:
+                        # Check next row
+                        if i + 1 < len(df):
+                            nrow = [df.iloc[i+1, j] for j in range(len(df.columns))]
+                            for cell in nrow:
+                                v = sf(cell)
+                                if v and 1000 < v < 100000:
+                                    data['total_undergrad'] = int(v); break
+
+                elif 'total undergraduates' in row_text and 'total_undergrad' not in data:
+                    # Try summing FT men + women + PT men + women from same row
+                    nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) and 100 < sf(c) < 100000]
+                    if len(nvs) >= 4:
+                        total = sum(v for _, v in nvs[:4])
+                        if 1000 < total < 200000:
+                            data['total_undergrad'] = int(total)
+                    elif len(nvs) == 1 and 1000 < nvs[0][1] < 100000:
+                        data['total_undergrad'] = int(nvs[0][1])
+
+            # ── Housing rates ────────────────────────────────────────────
+            # Detect F1 housing section header (Michigan unlabeled format)
+            if 'f1' in row_text and ('first-time' in row_text or 'undergraduates enrolled' in row_text) and 'student life' not in row_text:
+                _housing_header_seen = True
+                _housing_header_row  = i
+                _housing_sheet       = sh
+
+            # Handle unlabeled housing rows (Michigan style):
+            # After the F1 header, rows of just numbers appear: on-campus row then off-campus row
+            if (_housing_header_seen and sh == _housing_sheet and
+                    'pct_ug_on_campus' not in data and
+                    i > _housing_header_row and i <= _housing_header_row + 6):
+                nvs = [(j, sf(c)) for j, c in enumerate(row)
+                       if sf(c) is not None and 0.05 < sf(c) < 1.0]
+                if len(nvs) >= 2 and 'live' not in row_text:
+                    # Row with 2 values 0.05-1.0 and no text = on-campus rates
+                    data['pct_ftfy_on_campus'] = round(nvs[0][1], 4)
+                    data['pct_ug_on_campus']   = round(nvs[1][1], 4)
+
+            if 'live in college-owned' in row_text or ('affiliated' in row_text and 'housing' in row_text and 'percent' in row_text):
+                if 'pct_ug_on_campus' not in data:
+                    # Try decimal format first (0.25), then percentage format (25.0)
+                    nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) is not None and 0 < sf(c) < 2.0]
+                    if not nvs:
+                        nvs_pct = [(j, sf(c)/100) for j, c in enumerate(row) if sf(c) is not None and 1 < sf(c) <= 100]
+                        nvs = nvs_pct
+                    if len(nvs) >= 2:
+                        data['pct_ftfy_on_campus'] = round(nvs[0][1], 4)
+                        data['pct_ug_on_campus']   = round(nvs[1][1], 4)
+                    elif len(nvs) == 1 and 0 < nvs[0][1] < 1.0:
+                        data['pct_ug_on_campus'] = round(nvs[0][1], 4)
+
+            if 'live off campus or commute' in row_text:
+                if 'pct_ug_off_campus' not in data:
+                    nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) is not None and 0 < sf(c) < 2.0]
+                    if not nvs:
+                        nvs_pct = [(j, sf(c)/100) for j, c in enumerate(row) if sf(c) is not None and 1 < sf(c) <= 100]
+                        nvs = nvs_pct
+                    if len(nvs) >= 2:
+                        data['pct_ftfy_off_campus'] = round(nvs[0][1], 4)
+                        data['pct_ug_off_campus']   = round(nvs[1][1], 4)
+                    elif len(nvs) == 1 and 0 < nvs[0][1] < 1.0:
+                        data['pct_ug_off_campus'] = round(nvs[0][1], 4)
+
+            # ── OOS share ────────────────────────────────────────────────
+            if 'from out of state' in row_text and 'pct_oos_ug' not in data:
+                nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) is not None and 0 < sf(c) <= 1.0]
+                if len(nvs) >= 2:
+                    data['pct_oos_ftfy'] = round(nvs[0][1], 4)
+                    data['pct_oos_ug']   = round(nvs[1][1], 4)
+                elif len(nvs) == 1:
+                    data['pct_oos_ug'] = round(nvs[0][1], 4)
+
+            # ── Retention ────────────────────────────────────────────────
+            # Only look for B22 specifically (not B4-B21 graduation rate tables)
+            if 'retention_rate' not in data and 'b22' in row_text:
+                for lookahead in range(1, 15):
+                    if i + lookahead >= len(df): break
+                    nrow = [df.iloc[i + lookahead, j] for j in range(len(df.columns))]
+                    nrow_text = ' '.join(str(c) for c in nrow if c is not None).lower()
+                    # Stop if we hit another section
+                    if any(kw in nrow_text for kw in ['c. first-time','admission','b4','b5','graduation rate']):
+                        break
+                    for cell in nrow:
+                        v = sf(cell)
+                        if v is None: continue
+                        if 0.70 < v < 1.0:
+                            data['retention_rate'] = round(v, 4); break
+                        if 70 < v < 100:
+                            data['retention_rate'] = round(v / 100, 4); break
+                    if 'retention_rate' in data: break
+
+            # ── Tuition in-state ─────────────────────────────────────────
+            if 'tuition_instate' not in data and 'tuition' in row_text and 'in-state' in row_text:
+                for j, cell in enumerate(row):
+                    v = sf(cell)
+                    if v and 1000 < v < 80000:
+                        data['tuition_instate'] = int(v); break
+
+            # ── Need met ─────────────────────────────────────────────────
+            if 'pct_need_met' not in data and 'percentage of need that was met' in row_text:
+                nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) is not None and 0 < sf(c) <= 1.0]
+                if nvs:
+                    data['pct_need_met'] = round(nvs[0][1], 4)
+                else:
+                    # value might be on next row
+                    if i + 1 < len(df):
+                        nrow = [df.iloc[i+1, j] for j in range(len(df.columns))]
+                        for cell in nrow:
+                            v = sf(cell)
+                            if v and 0 < v <= 1.0:
+                                data['pct_need_met'] = round(v, 4); break
+                            if v and 50 < v <= 100:
+                                data['pct_need_met'] = round(v / 100, 4); break
+
+            # ── Avg aid package ──────────────────────────────────────────
+            if 'avg_aid_package' not in data and 'average financial aid package' in row_text:
+                for j, cell in enumerate(row):
+                    v = sf(cell)
+                    if v and 1000 < v < 100000:
+                        data['avg_aid_package'] = int(v); break
+                if 'avg_aid_package' not in data and i + 1 < len(df):
+                    nrow = [df.iloc[i+1, j] for j in range(len(df.columns))]
+                    for cell in nrow:
+                        v = sf(cell)
+                        if v and 1000 < v < 100000:
+                            data['avg_aid_package'] = int(v); break
+
+    # ── Derive off-campus rate if only on-campus available ───────────────
+    if 'pct_ug_off_campus' not in data and 'pct_ug_on_campus' in data:
+        data['pct_ug_off_campus'] = round(1.0 - data['pct_ug_on_campus'], 4)
+
+    # ── Compute demand ───────────────────────────────────────────────────
+    if 'total_undergrad' in data and 'pct_ug_off_campus' in data:
+        data['off_campus_demand'] = int(data['total_undergrad'] * data['pct_ug_off_campus'])
 
     return data
 
@@ -756,14 +1013,12 @@ def load_all_cds(folder):
     for f in sorted(files):
         school, year = parse_filename(f.name)
         if year is None:
-            print(f"  Skipping {f.name} — could not parse year from filename")
             continue
         try:
             rec = extract_cds(str(f), school, year)
             records.append(rec)
-            print(f"  ✓ {school} {year} — {len(rec)} variables extracted")
-        except Exception as e:
-            print(f"  ✗ {f.name} — ERROR: {e}")
+        except Exception:
+            pass
 
     if not records:
         return pd.DataFrame()

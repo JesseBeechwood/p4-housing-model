@@ -593,7 +593,7 @@ if not st.session_state.auth:
 # ── Load data ─────────────────────────────────────────────────────────────
 CDS_FOLDER = Path(__file__).parent / 'cds_files'
 
-@st.cache_data(ttl=300,show_spinner=False)
+@st.cache_data(ttl=301,show_spinner=False)
 def load():
     raw = load_all_cds(str(CDS_FOLDER))
     if raw.empty: return None,None,None

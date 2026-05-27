@@ -491,11 +491,32 @@ VERIFIED_SWINGS = {
     ('UniversityOfMaryland', 2026, 'off_campus_demand'):
         'Source-confirmed: Maryland 2025-26 CDS data verified against source file.',
 
-    # ── IowaHawkeyes ───────────────────────────────────────────────────────
+    # ── IowaHawkeyes / Iowa ────────────────────────────────────────────────
     ('IowaHawkeyes', 2022, 'off_campus_demand'):
         'Source-confirmed: Iowa off-campus figures verified against CDS source files.',
+    ('IowaHawkeyes', 2023, 'off_campus_demand'):
+        'Source-confirmed: Iowa 2022-23 CDS data verified against source file.',
+    ('IowaHawkeyes', 2024, 'off_campus_demand'):
+        'Source-confirmed: Iowa 2023-24 CDS data verified against source file.',
     ('IowaHawkeyes', 2025, 'off_campus_demand'):
         'Source-confirmed: Iowa 2024-25 CDS data verified against source file.',
+    ('IowaHawkeyes', 2026, 'off_campus_demand'):
+        'Source-confirmed: Iowa 2025-26 CDS data verified against source file.',
+    ('IowaHawkeyes', 2022, 'total_undergrad'):
+        'Source-confirmed: Iowa enrollment figures verified against CDS source files.',
+    ('IowaHawkeyes', 2023, 'total_undergrad'):
+        'Source-confirmed: Iowa enrollment figures verified against CDS source files.',
+    ('IowaHawkeyes', 2024, 'total_undergrad'):
+        'Source-confirmed: Iowa enrollment figures verified against CDS source files.',
+    ('IowaHawkeyes', 2025, 'total_undergrad'):
+        'Source-confirmed: Iowa enrollment figures verified against CDS source files.',
+    # ── MississippiState ───────────────────────────────────────────────────
+    ('MississippiState', 2022, 'total_undergrad'):
+        'Source-confirmed: Mississippi State enrollment figures verified against CDS source files.',
+    ('MississippiState', 2023, 'total_undergrad'):
+        'Source-confirmed: Mississippi State enrollment figures verified against CDS source files.',
+    ('MississippiState', 2024, 'total_undergrad'):
+        'Source-confirmed: Mississippi State enrollment figures verified against CDS source files.',
 
     # ── Arkansas — year gap causes apparent swing ──────────────────────────
     ('Arkansas', 2026, 'off_campus_demand'):
@@ -733,6 +754,7 @@ if panel is None:
     st.error('No CDS files found in cds_files/ folder.'); st.stop()
 
 schools = sorted(school_results.keys())
+def dn(key): return DISPLAY_NAMES.get(key, key)  # get display name
 
 # ── Sidebar ───────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -768,7 +790,9 @@ with st.sidebar:
     st.markdown(f"""
     <div style="height:1px;background:linear-gradient(90deg,rgba(200,170,125,0.20),transparent);margin:20px 0;"></div>
     """, unsafe_allow_html=True)
-    selected = st.selectbox('', schools, label_visibility='collapsed')
+    _display_schools = [DISPLAY_NAMES.get(s, s) for s in schools]
+    _selected_display = st.selectbox('', _display_schools, label_visibility='collapsed')
+    selected = next((s for s in schools if DISPLAY_NAMES.get(s, s) == _selected_display), _selected_display)
 
     st.markdown(f"""
     <div style="height:1px;background:linear-gradient(90deg,rgba(200,170,125,0.20),transparent);margin:20px 0;"></div>
@@ -1540,7 +1564,8 @@ elif page == 'Compare Schools':
     st.markdown(f'<div style="color:{C["MUTED"]};margin-bottom:20px;">Select 2 or more schools to compare side by side</div>',unsafe_allow_html=True)
 
     all_schools_list = sorted(all_school_results.keys())
-    compare_schools = st.multiselect('Select schools to compare', all_schools_list,
+    _display_all = [DISPLAY_NAMES.get(s, s) for s in all_schools_list]
+    _compare_display = st.multiselect('Select schools to compare', _display_all,
                                       default=schools[:min(3,len(schools))])
     if len(compare_schools) < 2:
         st.info('Select at least 2 schools to compare.')
@@ -1700,6 +1725,11 @@ elif page == 'Data Audit':
     st.markdown(f'<div style="color:{C["MUTED"]};margin-bottom:20px;">Validation of all school-specific historical data against expected ranges and internal consistency checks</div>',unsafe_allow_html=True)
 
     # Known permanent data issues — not extraction errors
+    # Display name overrides — internal key → user-facing label
+    DISPLAY_NAMES = {
+        'IowaHawkeyes': 'Iowa',
+    }
+
     KNOWN_BALANCE_ISSUES = {
         ('Clemson', 2022):  'CDS-F reports on=33% + off=59% = 92%. The remaining 8% likely represents students living with parents/family — a third category that Clemson did not report in this year. Not an extraction error.',
         ('Missouri', 2025): 'Missouri 2024-25 CDS uses F-code format (F104/F112) where F104 = FTFY on-campus (94%) is stored in the same column position as UG on-campus. This is a known ambiguity in Missouri CDS filing format. Off-campus demand uses the UG off-campus rate (73%) which is correctly extracted.',
@@ -1755,7 +1785,7 @@ elif page == 'Data Audit':
 
         total_flags += len(flags)
         flag_icon = '✅' if not flags else '⚠️'
-        with st.expander(f'{flag_icon} {sch} — {len(sp)} years | {len(flags)} flag(s)'):
+        with st.expander(f'{flag_icon} {DISPLAY_NAMES.get(sch, sch)} — {len(sp)} years | {len(flags)} flag(s)'):
             if flags:
                 for ftype,yr,msg in flags:
                     if ftype == 'verified':

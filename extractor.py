@@ -219,28 +219,20 @@ def extract_cds(filepath, school_name, year):
                         if v and 5000 < v < 100000:
                             data['total_undergrad'] = int(v)
                             break
-                elif ((cl.startswith('total all undergraduates') or
-                       cl.startswith('total undergraduate students') or
-                       cl.startswith('total undergraduates')) and
+                elif (('total all undergraduates' in cl or
+                       'total undergraduate students' in cl) and
                       'total_undergrad' not in data and
-                      ': male' not in cl and ': female' not in cl and
-                      'males' not in cl and 'females' not in cl):
+                      ': males' not in cl and ': females' not in cl and
+                      ':males' not in cl and ':females' not in cl):
                     nums = []
                     for k in range(j+1, min(j+8, len(row))):
                         v = _to_float(b.iloc[i, k])
                         if v and 1000 < v < 100000:
                             nums.append(v)
                     if nums:
-                        # Check if the largest value is the grand total (equals sum of rest)
-                        nums_s = sorted(nums, reverse=True)
-                        max_v   = nums_s[0]
-                        rest    = sum(nums_s[1:])
-                        if len(nums) >= 2 and abs(max_v - rest) / max(max_v, 1) < 0.05:
-                            # Max is the grand total column
-                            data['total_undergrad'] = int(max_v)
-                        elif len(nums) >= 2:
-                            # Sum all breakdown columns (men + women + PT + etc)
-                            data['total_undergrad'] = int(sum(nums))
+                        # If multiple large numbers it is split by gender — sum them
+                        if len(nums) >= 2 and sum(nums[:2]) > 3000:
+                            data['total_undergrad'] = int(sum(nums[:2]))
                         else:
                             data['total_undergrad'] = int(nums[0])
                         break
@@ -627,19 +619,17 @@ def _extract_table_based(filepath, school_name, year):
 
             # ── Total undergrad enrollment ──────────────────────────────
             if 'total_undergrad' not in data:
-                # Handle enrollment from racial/ethnic breakdown table (Michigan format):
-                # Row label 'Total' with large numbers in columns for UG and FTFY
-                row_stripped = row_text.strip()
-                # Only fire if 'total' explicitly appears AND no other disqualifying words
-                if 'total' in row_stripped.split():
-                    non_num_words = [w for w in row_stripped.split()
-                                     if not w.replace(',','').replace('.','').isdigit()
-                                     and w.lower() not in ('total',)]
-                    if len(non_num_words) == 0:  # pure 'Total [numbers]' row
-                        nvs = [(j, sf(c)) for j, c in enumerate(row)
-                               if sf(c) is not None and 5000 < sf(c) < 150000]
-                        if nvs:
-                            data['total_undergrad'] = int(max(v for _, v in nvs))
+                # Handle enrollment from racial/ethnic breakdown table:
+                # Row like ['TOTAL', 9550, 36571, 36833] where text is just 'total'
+                # Only fire when the text word is exactly 'TOTAL'/'Total' with no other words
+                _stripped = row_text.strip()
+                _words = [w for w in _stripped.split()
+                          if not w.replace(',','').replace('.','').isdigit()]
+                if len(_words) == 1 and _words[0].lower() == 'total':
+                    nvs = [(j, sf(c)) for j, c in enumerate(row)
+                           if sf(c) is not None and 5000 < sf(c) < 150000]
+                    if nvs:
+                        data['total_undergrad'] = int(max(v for _, v in nvs))
 
                 # Handle lone large number in a row (Ohio State Table 1 format)
                 if (len([c for c in row if c is not None]) == 1):
@@ -647,61 +637,53 @@ def _extract_table_based(filepath, school_name, year):
                     if v and 10000 < v < 100000:
                         data['total_undergrad'] = int(v)
 
-            if 'total all undergraduates' in row_text:
-                nvs = [sf(c) for c in row if sf(c) is not None and 1000 < sf(c) < 200000]
-                if nvs and 'total_undergrad' not in data:
-                    data['total_undergrad'] = int(max(nvs))
-                elif not nvs:
-                    # Label-only row — value may be on a row above (Arkansas pattern)
-                    for lb in range(1, 3):
-                        prev_idx = i - lb
-                        if prev_idx >= 0 and prev_idx < len(df):
-                            pr = [df.iloc[prev_idx, k] for k in range(len(df.columns))]
-                            pr_nonnull = [c for c in pr
-                                          if c is not None and str(c)!='nan' and c==c]
-                            if len(pr_nonnull) == 1:
-                                pv = sf(pr_nonnull[0])
-                                if pv and 5000 < pv < 200000:
-                                    # Always use this authoritative label value
-                                    # even if a partial value was set from a breakdown row
+                if 'total all undergraduates' in row_text:
+                    nvs = [sf(c) for c in row if sf(c) is not None and 1000 < sf(c) < 200000]
+                    if nvs:
+                        candidate = int(max(nvs))
+                        existing  = data.get('total_undergrad', 0) or 0
+                        # Always set if not found; override if candidate is ≥1.5x existing
+                        # (existing was a single-gender breakdown column, candidate is the total)
+                        if not existing or candidate >= existing * 1.5:
+                            data['total_undergrad'] = candidate
+                    elif not nvs:
+                        # Number may be embedded in text: 'Total All Undergraduates: 32,423'
+                        import re as _re2
+                        for c in row:
+                            if c is None: continue
+                            m = _re2.search(r'(\d[\d,]+)', str(c))
+                            if m:
+                                pv = sf(m.group(1).replace(',', ''))
+                                if pv and 5000 < pv < 200000 and not data.get('total_undergrad'):
                                     data['total_undergrad'] = int(pv)
                                     break
 
-            if ('total undergraduate students' in row_text or
-                'total undergraduates' in row_text) and 'total_undergrad' not in data:
-                nvs = [sf(c) for c in row if sf(c) is not None and 100 < sf(c) < 100000]
-                if nvs:
-                    # If one value equals the sum of the rest, it's the grand total column
-                    # (e.g. Alabama: [13582, 17456, 1388, 1963, 34389] — 34389 = sum of rest)
-                    nvs_sorted = sorted(nvs, reverse=True)
-                    max_val = nvs_sorted[0]
-                    rest_sum = sum(nvs_sorted[1:])
-                    if len(nvs) >= 3 and abs(max_val - rest_sum) / max(max_val, 1) < 0.05:
-                        # Max is the grand total — use it directly
-                        data['total_undergrad'] = int(max_val)
-                    elif sum(nvs) > 1000:
+                if ('total undergraduate students' in row_text or
+                    'total undergraduates' in row_text) and 'total_undergrad' not in data:
+                    # Sum all numeric values (men + women + other + unknown columns)
+                    nvs = [sf(c) for c in row if sf(c) is not None and 100 < sf(c) < 100000]
+                    if nvs and sum(nvs) > 1000:
                         data['total_undergrad'] = int(sum(nvs))
-                if 'total_undergrad' not in data:
-                    # Only use next-row lookup if this is a single label row,
-                    # not a multi-column header row
-                    text_cells = [c for c in row if c is not None
-                                  and isinstance(c, str) and len(str(c).strip()) > 10]
-                    if len(text_cells) <= 1 and i + 1 < len(df):
-                        nrow = [df.iloc[i+1, j] for j in range(len(df.columns))]
-                        for cell in nrow:
-                            v = sf(cell)
-                            if v and 1000 < v < 100000:
-                                data['total_undergrad'] = int(v); break
+                    if 'total_undergrad' not in data:
+                        # Only use next-row lookup when this is a single label row
+                        # (not a multi-column header — headers have multiple long text strings)
+                        _long = [c for c in row if isinstance(c, str) and len(str(c).strip()) > 15]
+                        if len(_long) <= 1 and i + 1 < len(df):
+                            nrow = [df.iloc[i+1, j] for j in range(len(df.columns))]
+                            for cell in nrow:
+                                v = sf(cell)
+                                if v and 1000 < v < 100000:
+                                    data['total_undergrad'] = int(v); break
 
-            elif 'total undergraduates' in row_text and 'total_undergrad' not in data:
-                # Try summing FT men + women + PT men + women from same row
-                nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) and 100 < sf(c) < 100000]
-                if len(nvs) >= 4:
-                    total = sum(v for _, v in nvs[:4])
-                    if 1000 < total < 200000:
-                        data['total_undergrad'] = int(total)
-                elif len(nvs) == 1 and 1000 < nvs[0][1] < 100000:
-                    data['total_undergrad'] = int(nvs[0][1])
+                elif 'total undergraduates' in row_text and 'total_undergrad' not in data:
+                    # Try summing FT men + women + PT men + women from same row
+                    nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) and 100 < sf(c) < 100000]
+                    if len(nvs) >= 4:
+                        total = sum(v for _, v in nvs[:4])
+                        if 1000 < total < 200000:
+                            data['total_undergrad'] = int(total)
+                    elif len(nvs) == 1 and 1000 < nvs[0][1] < 100000:
+                        data['total_undergrad'] = int(nvs[0][1])
 
             # ── Housing rates ────────────────────────────────────────────
             # Detect F1 housing section header (Michigan unlabeled format)
@@ -710,20 +692,19 @@ def _extract_table_based(filepath, school_name, year):
                 _housing_header_row  = i
                 _housing_sheet       = sh
 
-            # Handle unlabeled housing rows (Michigan style):
-            # After the F1 header, rows of just numbers: on-campus then off-campus
-            # Exclude rows with text keywords indicating OOS/in-state (not housing)
+            # Handle unlabeled housing rows (Michigan/Big Ten style):
+            # After the F1 header, rows of just numbers appear: on-campus then off-campus.
+            # Key distinguisher: housing rows have HIGH spread between FTFY (~0.90) and
+            # UG (~0.25-0.35) values. In-state/OOS rows have similar values (low spread).
             if (_housing_header_seen and sh == _housing_sheet and
                     'pct_ug_on_campus' not in data and
-                    i > _housing_header_row and i <= _housing_header_row + 8):
-                _excl = ['state','international','nonresident','citizen',
-                         'race','ethnic','age','gender','percent who are']
-                if not any(kw in row_text for kw in _excl):
-                    _text_cells = [c for c in row if c is not None
-                                   and isinstance(c, str) and len(c.strip()) > 3]
-                    nvs = [(j, sf(c)) for j, c in enumerate(row)
-                           if sf(c) is not None and 0.05 < sf(c) < 1.0]
-                    if len(nvs) >= 2 and len(_text_cells) == 0:
+                    i > _housing_header_row and i <= _housing_header_row + 6):
+                nvs = [(j, sf(c)) for j, c in enumerate(row)
+                       if sf(c) is not None and 0.05 < sf(c) < 1.0]
+                # Require spread > 0.25 between values to distinguish from in-state rows
+                if len(nvs) >= 2 and 'live' not in row_text:
+                    spread = abs(nvs[0][1] - nvs[1][1])
+                    if spread > 0.25:
                         data['pct_ftfy_on_campus'] = round(nvs[0][1], 4)
                         data['pct_ug_on_campus']   = round(nvs[1][1], 4)
 

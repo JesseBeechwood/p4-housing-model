@@ -38,37 +38,6 @@ def _linear_trend(series, years):
 
 def build_panel(df_raw):
     df = df_raw.copy()
-
-    # ── Enrollment consistency check ─────────────────────────────────────
-    # Correct gross YoY jumps (>50%) that indicate extraction errors.
-    # Replaces outlier with linear interpolation from surrounding years.
-    import numpy as _np
-    for school, grp in df.groupby('school'):
-        idx = grp.sort_values('academic_year').index
-        vals = df.loc[idx, 'total_undergrad'].values.copy().astype(float)
-        yrs  = df.loc[idx, 'academic_year'].values.copy().astype(float)
-        if len(vals) < 3: continue
-        changed = True
-        while changed:
-            changed = False
-            for i in range(1, len(vals)-1):
-                v, prev, nxt = vals[i], vals[i-1], vals[i+1]
-                if not (_np.isfinite(v) and _np.isfinite(prev) and _np.isfinite(nxt)):
-                    continue
-                pct_from_prev = abs(v-prev)/prev if prev > 0 else 0
-                pct_from_next = abs(v-nxt)/nxt if nxt > 0 else 0
-                # Outlier: changes >50% from both neighbors = likely extraction error
-                if pct_from_prev > 0.50 and pct_from_next > 0.50:
-                    interp = prev + (nxt-prev) * (yrs[i]-yrs[i-1]) / (yrs[i+1]-yrs[i-1])
-                    vals[i] = interp
-                    changed = True
-        df.loc[idx, 'total_undergrad'] = vals
-        # Recompute off_campus_demand from corrected enrollment
-        if 'pct_ug_off_campus' in df.columns:
-            off = df.loc[idx, 'pct_ug_off_campus'].values
-            df.loc[idx, 'off_campus_demand'] = (vals * off)
-    # ──────────────────────────────────────────────────────────────────────
-
     lag_cols = ['total_undergrad','off_campus_demand','tuition_instate',
                 'avg_aid_package','pct_oos_ug','retention_rate',
                 'pct_ug_off_campus','pct_ug_on_campus']

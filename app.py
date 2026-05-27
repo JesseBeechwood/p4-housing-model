@@ -525,6 +525,11 @@ VERIFIED_SWINGS = {
         'Source-confirmed: Arkansas 2025-26 CDS reports 29,252 total undergraduates, consistent with the growth trend from 22,825 (2020-21) through 26,269 (2022-23).',
 }
 
+# Display name overrides — internal key → user-facing label
+DISPLAY_NAMES = {
+    'IowaHawkeyes': 'Iowa',
+}
+
 
 # ── School brand colors + initials for inline SVG logos ─────────────────
 SCHOOL_BRAND = {
@@ -1725,11 +1730,6 @@ elif page == 'Data Audit':
     st.markdown(f'<div style="color:{C["MUTED"]};margin-bottom:20px;">Validation of all school-specific historical data against expected ranges and internal consistency checks</div>',unsafe_allow_html=True)
 
     # Known permanent data issues — not extraction errors
-    # Display name overrides — internal key → user-facing label
-    DISPLAY_NAMES = {
-        'IowaHawkeyes': 'Iowa',
-    }
-
     KNOWN_BALANCE_ISSUES = {
         ('Clemson', 2022):  'CDS-F reports on=33% + off=59% = 92%. The remaining 8% likely represents students living with parents/family — a third category that Clemson did not report in this year. Not an extraction error.',
         ('Missouri', 2025): 'Missouri 2024-25 CDS uses F-code format (F104/F112) where F104 = FTFY on-campus (94%) is stored in the same column position as UG on-campus. This is a known ambiguity in Missouri CDS filing format. Off-campus demand uses the UG off-campus rate (73%) which is correctly extracted.',

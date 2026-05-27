@@ -219,17 +219,28 @@ def extract_cds(filepath, school_name, year):
                         if v and 5000 < v < 100000:
                             data['total_undergrad'] = int(v)
                             break
-                elif ('total all undergraduates' in cl or
-                      'total undergraduate students' in cl) and 'total_undergrad' not in data:
+                elif ((cl.startswith('total all undergraduates') or
+                       cl.startswith('total undergraduate students') or
+                       cl.startswith('total undergraduates')) and
+                      'total_undergrad' not in data and
+                      ': male' not in cl and ': female' not in cl and
+                      'males' not in cl and 'females' not in cl):
                     nums = []
                     for k in range(j+1, min(j+8, len(row))):
                         v = _to_float(b.iloc[i, k])
                         if v and 1000 < v < 100000:
                             nums.append(v)
                     if nums:
-                        # If multiple large numbers it is split by gender — sum them
-                        if len(nums) >= 2 and sum(nums[:2]) > 3000:
-                            data['total_undergrad'] = int(sum(nums[:2]))
+                        # Check if the largest value is the grand total (equals sum of rest)
+                        nums_s = sorted(nums, reverse=True)
+                        max_v   = nums_s[0]
+                        rest    = sum(nums_s[1:])
+                        if len(nums) >= 2 and abs(max_v - rest) / max(max_v, 1) < 0.05:
+                            # Max is the grand total column
+                            data['total_undergrad'] = int(max_v)
+                        elif len(nums) >= 2:
+                            # Sum all breakdown columns (men + women + PT + etc)
+                            data['total_undergrad'] = int(sum(nums))
                         else:
                             data['total_undergrad'] = int(nums[0])
                         break
@@ -618,11 +629,17 @@ def _extract_table_based(filepath, school_name, year):
             if 'total_undergrad' not in data:
                 # Handle enrollment from racial/ethnic breakdown table (Michigan format):
                 # Row label 'Total' with large numbers in columns for UG and FTFY
-                if row_text.strip() == 'total' or 'total' == row_text[:5]:
-                    nvs = [(j, sf(c)) for j, c in enumerate(row)
-                           if sf(c) is not None and 5000 < sf(c) < 150000]
-                    if nvs:
-                        data['total_undergrad'] = int(max(v for _, v in nvs))
+                row_stripped = row_text.strip()
+                # Only fire if 'total' explicitly appears AND no other disqualifying words
+                if 'total' in row_stripped.split():
+                    non_num_words = [w for w in row_stripped.split()
+                                     if not w.replace(',','').replace('.','').isdigit()
+                                     and w.lower() not in ('total',)]
+                    if len(non_num_words) == 0:  # pure 'Total [numbers]' row
+                        nvs = [(j, sf(c)) for j, c in enumerate(row)
+                               if sf(c) is not None and 5000 < sf(c) < 150000]
+                        if nvs:
+                            data['total_undergrad'] = int(max(v for _, v in nvs))
 
                 # Handle lone large number in a row (Ohio State Table 1 format)
                 if (len([c for c in row if c is not None]) == 1):
@@ -652,13 +669,24 @@ def _extract_table_based(filepath, school_name, year):
 
             if ('total undergraduate students' in row_text or
                 'total undergraduates' in row_text) and 'total_undergrad' not in data:
-                # Sum all numeric values (men + women + other + unknown columns)
                 nvs = [sf(c) for c in row if sf(c) is not None and 100 < sf(c) < 100000]
-                if nvs and sum(nvs) > 1000:
-                    data['total_undergrad'] = int(sum(nvs))
+                if nvs:
+                    # If one value equals the sum of the rest, it's the grand total column
+                    # (e.g. Alabama: [13582, 17456, 1388, 1963, 34389] — 34389 = sum of rest)
+                    nvs_sorted = sorted(nvs, reverse=True)
+                    max_val = nvs_sorted[0]
+                    rest_sum = sum(nvs_sorted[1:])
+                    if len(nvs) >= 3 and abs(max_val - rest_sum) / max(max_val, 1) < 0.05:
+                        # Max is the grand total — use it directly
+                        data['total_undergrad'] = int(max_val)
+                    elif sum(nvs) > 1000:
+                        data['total_undergrad'] = int(sum(nvs))
                 if 'total_undergrad' not in data:
-                    # Check next row
-                    if i + 1 < len(df):
+                    # Only use next-row lookup if this is a single label row,
+                    # not a multi-column header row
+                    text_cells = [c for c in row if c is not None
+                                  and isinstance(c, str) and len(str(c).strip()) > 10]
+                    if len(text_cells) <= 1 and i + 1 < len(df):
                         nrow = [df.iloc[i+1, j] for j in range(len(df.columns))]
                         for cell in nrow:
                             v = sf(cell)
@@ -687,7 +715,7 @@ def _extract_table_based(filepath, school_name, year):
             # Exclude rows with text keywords indicating OOS/in-state (not housing)
             if (_housing_header_seen and sh == _housing_sheet and
                     'pct_ug_on_campus' not in data and
-                    i > _housing_header_row and i <= _housing_header_row + 4):
+                    i > _housing_header_row and i <= _housing_header_row + 8):
                 _excl = ['state','international','nonresident','citizen',
                          'race','ethnic','age','gender','percent who are']
                 if not any(kw in row_text for kw in _excl):

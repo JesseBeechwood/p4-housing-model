@@ -630,36 +630,50 @@ def _extract_table_based(filepath, school_name, year):
                     if v and 10000 < v < 100000:
                         data['total_undergrad'] = int(v)
 
-                if 'total all undergraduates' in row_text:
-                    # Prefer the largest value in the row — last column is often the grand total
-                    nvs = [sf(c) for c in row if sf(c) is not None and 1000 < sf(c) < 200000]
-                    if nvs:
-                        data['total_undergrad'] = int(max(nvs))
+            if 'total all undergraduates' in row_text:
+                nvs = [sf(c) for c in row if sf(c) is not None and 1000 < sf(c) < 200000]
+                if nvs and 'total_undergrad' not in data:
+                    data['total_undergrad'] = int(max(nvs))
+                elif not nvs:
+                    # Label-only row — value may be on a row above (Arkansas pattern)
+                    for lb in range(1, 3):
+                        prev_idx = i - lb
+                        if prev_idx >= 0 and prev_idx < len(df):
+                            pr = [df.iloc[prev_idx, k] for k in range(len(df.columns))]
+                            pr_nonnull = [c for c in pr
+                                          if c is not None and str(c)!='nan' and c==c]
+                            if len(pr_nonnull) == 1:
+                                pv = sf(pr_nonnull[0])
+                                if pv and 5000 < pv < 200000:
+                                    # Always use this authoritative label value
+                                    # even if a partial value was set from a breakdown row
+                                    data['total_undergrad'] = int(pv)
+                                    break
 
-                if ('total undergraduate students' in row_text or
-                    'total undergraduates' in row_text) and 'total_undergrad' not in data:
-                    # Sum all numeric values (men + women + other + unknown columns)
-                    nvs = [sf(c) for c in row if sf(c) is not None and 100 < sf(c) < 100000]
-                    if nvs and sum(nvs) > 1000:
-                        data['total_undergrad'] = int(sum(nvs))
-                    if 'total_undergrad' not in data:
-                        # Check next row
-                        if i + 1 < len(df):
-                            nrow = [df.iloc[i+1, j] for j in range(len(df.columns))]
-                            for cell in nrow:
-                                v = sf(cell)
-                                if v and 1000 < v < 100000:
-                                    data['total_undergrad'] = int(v); break
+            if ('total undergraduate students' in row_text or
+                'total undergraduates' in row_text) and 'total_undergrad' not in data:
+                # Sum all numeric values (men + women + other + unknown columns)
+                nvs = [sf(c) for c in row if sf(c) is not None and 100 < sf(c) < 100000]
+                if nvs and sum(nvs) > 1000:
+                    data['total_undergrad'] = int(sum(nvs))
+                if 'total_undergrad' not in data:
+                    # Check next row
+                    if i + 1 < len(df):
+                        nrow = [df.iloc[i+1, j] for j in range(len(df.columns))]
+                        for cell in nrow:
+                            v = sf(cell)
+                            if v and 1000 < v < 100000:
+                                data['total_undergrad'] = int(v); break
 
-                elif 'total undergraduates' in row_text and 'total_undergrad' not in data:
-                    # Try summing FT men + women + PT men + women from same row
-                    nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) and 100 < sf(c) < 100000]
-                    if len(nvs) >= 4:
-                        total = sum(v for _, v in nvs[:4])
-                        if 1000 < total < 200000:
-                            data['total_undergrad'] = int(total)
-                    elif len(nvs) == 1 and 1000 < nvs[0][1] < 100000:
-                        data['total_undergrad'] = int(nvs[0][1])
+            elif 'total undergraduates' in row_text and 'total_undergrad' not in data:
+                # Try summing FT men + women + PT men + women from same row
+                nvs = [(j, sf(c)) for j, c in enumerate(row) if sf(c) and 100 < sf(c) < 100000]
+                if len(nvs) >= 4:
+                    total = sum(v for _, v in nvs[:4])
+                    if 1000 < total < 200000:
+                        data['total_undergrad'] = int(total)
+                elif len(nvs) == 1 and 1000 < nvs[0][1] < 100000:
+                    data['total_undergrad'] = int(nvs[0][1])
 
             # ── Housing rates ────────────────────────────────────────────
             # Detect F1 housing section header (Michigan unlabeled format)
@@ -669,21 +683,19 @@ def _extract_table_based(filepath, school_name, year):
                 _housing_sheet       = sh
 
             # Handle unlabeled housing rows (Michigan style):
-            # After the F1 housing header, rows of just numbers: on-campus row then off-campus row
-            # Only trigger on rows that look like housing rates — not in-state/OOS rows
+            # After the F1 header, rows of just numbers: on-campus then off-campus
+            # Exclude rows with text keywords indicating OOS/in-state (not housing)
             if (_housing_header_seen and sh == _housing_sheet and
                     'pct_ug_on_campus' not in data and
                     i > _housing_header_row and i <= _housing_header_row + 4):
-                # Exclude rows that contain text suggesting they're something else
-                exclude_kws = ['state', 'international', 'nonresident', 'citizen',
-                               'race', 'ethnic', 'age', 'gender', 'percent who are']
-                if not any(kw in row_text for kw in exclude_kws):
+                _excl = ['state','international','nonresident','citizen',
+                         'race','ethnic','age','gender','percent who are']
+                if not any(kw in row_text for kw in _excl):
+                    _text_cells = [c for c in row if c is not None
+                                   and isinstance(c, str) and len(c.strip()) > 3]
                     nvs = [(j, sf(c)) for j, c in enumerate(row)
                            if sf(c) is not None and 0.05 < sf(c) < 1.0]
-                    # Must have exactly 2 values (FTFY and UG columns) and no other text
-                    text_cells = [c for c in row if c is not None and isinstance(c, str)
-                                  and len(c.strip()) > 3]
-                    if len(nvs) >= 2 and len(text_cells) == 0:
+                    if len(nvs) >= 2 and len(_text_cells) == 0:
                         data['pct_ftfy_on_campus'] = round(nvs[0][1], 4)
                         data['pct_ug_on_campus']   = round(nvs[1][1], 4)
 
